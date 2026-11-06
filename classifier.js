@@ -81,6 +81,19 @@
     return byDomain ? byDomain.name : null;
   }
 
+  /* Bei internen Mails mit eingebettetem Verlauf (Antwort/Weiterleitung eines Kollegen)
+     den ersten externen Original-Absender aus den Kopfzeilen „From:/Von:“ ermitteln. */
+  function originalSender(body, cfg) {
+    var rx = /^\s*(?:From|Von)\s*:\s*(.*?)\s*<?\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\s*>?\s*$/gim, m;
+    while ((m = rx.exec(body)) !== null) {
+      var addr = m[2];
+      if (!domainMatches(domainOf(addr), cfg.ownDomains)) {
+        return { fromName: m[1].replace(/["<]/g, "").trim(), fromAddress: addr };
+      }
+    }
+    return null;
+  }
+
   function classify(mail, cfg) {
     var subject = mail.subject || "";
     var body = (mail.body || "").slice(0, 8000);
@@ -88,6 +101,16 @@
     var refs = findRefs(text);
     var domain = domainOf(mail.fromAddress);
     var intern = domainMatches(domain, cfg.ownDomains);
+    var via = null;
+    if (intern) {
+      var orig = originalSender(body, cfg);
+      if (orig) {
+        via = mail.fromName || mail.fromAddress;
+        mail = { subject: subject, body: body, fromName: orig.fromName, fromAddress: orig.fromAddress, attachments: mail.attachments };
+        domain = domainOf(orig.fromAddress);
+        intern = false;
+      }
+    }
     var customer = intern ? null : findCustomer(mail, cfg);
     var type;
 
@@ -121,7 +144,8 @@
       skill: t.skill,
       skills: t.skills,
       customer: customer,
-      partner: customer || (intern ? "Intern" : (mail.fromName || domain)),
+      partner: (customer || (intern ? "Intern" : (mail.fromName || domain))) + (via ? " (über " + via + ")" : ""),
+      via: via,
       refs: refs,
       vorgang: vorgang.length ? vorgang.join(" · ") : "Kein Vorgang erkannt",
       language: /[äöüß]|\b(sehr geehrte|hallo|anbei|ihrer|bitte|vielen dank|mit freundlichen)/i.test(text) ? "Deutsch" : "Englisch"

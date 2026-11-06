@@ -64,7 +64,7 @@
     badge.textContent = r.label;
     badge.className = "badge t-" + r.tone;
     $("vorgang").textContent = r.vorgang;
-    $("partner").textContent = (state.mail.fromName || state.mail.fromAddress) + (state.mail.attachments.length ? " · " + state.mail.attachments.length + (state.mail.attachments.length === 1 ? " Anhang" : " Anhänge") : "");
+    $("partner").textContent = (r.via ? r.partner : (state.mail.fromName || state.mail.fromAddress)) + (state.mail.attachments.length ? " · " + state.mail.attachments.length + (state.mail.attachments.length === 1 ? " Anhang" : " Anhänge") : "");
     $("task").textContent = r.task;
     var sk = $("skills"); clear(sk);
     r.skills.forEach(function (s) { sk.appendChild(el("span", "skill", s)); });
