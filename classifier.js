@@ -10,12 +10,13 @@
     re: /\bRE\s?(\d{7})\b/gi,
     po: /\bPO\s?#?\s?(\d{8,10})\b/gi,
     eb: /\bEB\s?(\d{5,10})\b/gi,
+    po2: /purchase\s+order\s*(?:no\.?|nr\.?|number|#)?\s*:?\s*(\d{6,10})\b/gi,
     sap: /\b(4500\d{6})\b/g,
     gdels: /\b(6000\d{6})\b/g,
     rfq: /\bRFQ\s*(?:No\.?|Nr\.?|#)?\s*(\d{6,10})\b/gi,
     projekt: /\bL-(\d{4})\b/g
   };
-  var REF_PREFIX = { an: "AN", au: "AU", be: "BE", re: "RE", po: "PO", eb: "EB", sap: "", gdels: "", rfq: "RFQ ", projekt: "L-" };
+  var REF_PREFIX = { an: "AN", au: "AU", be: "BE", re: "RE", po: "PO", po2: "PO", eb: "EB", sap: "", gdels: "", rfq: "RFQ ", projekt: "L-" };
 
   var RX = {
     order: /(purchase\s+order|\bbestellung\b|\border\s+no\b|\bPO\s?#?\s?\d{6,}|\bEB\s?\d{5,}|\b4500\d{6}\b|blanket\s+order|abruf)/i,

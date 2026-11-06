@@ -4,6 +4,7 @@
   var cfg = window.KUEHLER_CONFIG;
   var C = window.KuehlerClassifier;
   var G = window.KuehlerGraph;
+  var T = window.KuehlerTemplates;
   var state = { mail: null, result: null, tone: "Formell", language: "Deutsch", loadId: 0 };
 
   function $(id) { return document.getElementById(id); }
@@ -69,12 +70,55 @@
     r.skills.forEach(function (s) { sk.appendChild(el("span", "skill", s)); });
     $("btnHandoff").textContent = r.skill ? "An Claude übergeben (/" + r.skill + ")" : "An Claude übergeben";
     $("handoffMsg").hidden = true;
-    $("replyMsg").hidden = true;
+    $("outlookMsg").hidden = true;
     $("replyText").value = "";
     $("replyAttach").value = "";
     state.tone = (r.type === "intern") ? "Kurz" : "Formell";
     state.language = r.language;
     renderChips();
+    var tl = $("templates"); clear(tl);
+    T.forType(r.type).forEach(function (t) {
+      var b = el("button", "secondary wide", t.label);
+      b.type = "button";
+      b.addEventListener("click", function () { openTemplate(t.id); });
+      tl.appendChild(b);
+    });
+  }
+
+  /* ---------- Direkt in Outlook: Vorlage im Antwort- bzw. Neu-Fenster öffnen ---------- */
+  function openTemplate(id) {
+    var msg = $("outlookMsg");
+    var mailbox = Office.context.mailbox;
+    var ctx = {
+      tone: state.tone,
+      language: state.language,
+      instruction: $("replyText").value.trim(),
+      me: mailbox.userProfile ? mailbox.userProfile.emailAddress : ""
+    };
+    if (id === "eigener_text" && !ctx.instruction) {
+      msg.hidden = false; msg.className = "err";
+      msg.textContent = "Bitte zuerst den eigenen Text eingeben.";
+      $("replyText").focus();
+      return;
+    }
+    var out = T.build(id, state.mail, state.result, ctx);
+    try {
+      var item = mailbox.item;
+      if (out.mode === "new") {
+        mailbox.displayNewMessageForm({ toRecipients: out.to || [], subject: out.subject || "", htmlBody: out.html });
+      } else if (out.mode === "replyAll") {
+        if (item.displayReplyAllFormAsync) item.displayReplyAllFormAsync({ htmlBody: out.html });
+        else item.displayReplyAllForm({ htmlBody: out.html });
+      } else {
+        if (item.displayReplyFormAsync) item.displayReplyFormAsync({ htmlBody: out.html });
+        else item.displayReplyForm({ htmlBody: out.html });
+      }
+      msg.hidden = false; msg.className = "ok";
+      msg.textContent = "In Outlook geöffnet." + (out.hint ? " " + out.hint : "");
+    } catch (e) {
+      msg.hidden = false; msg.className = "err";
+      msg.textContent = "Outlook konnte das Fenster nicht öffnen: " + (e && e.message ? e.message : e);
+    }
   }
 
   function chipGroup(container, values, current, onPick) {
@@ -168,14 +212,34 @@
     t.select();
     try { return document.execCommand("copy"); } catch (e) { return false; }
   }
+  function openDesktop(url) {
+    // Eigenes URL-Schema der Claude-Desktop-App; Office.context.ui.openBrowserWindow akzeptiert nur https
+    var w = null;
+    try { w = window.open(url, "_blank"); } catch (e) { w = null; }
+    if (!w) {
+      try { var a = document.createElement("a"); a.href = url; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); } catch (e2) { /* Link unten bleibt */ }
+    }
+  }
   function handoff(prompt, msgBox) {
+    var q = cfg.claudePrefill ? "?q=" + encodeURIComponent(prompt.slice(0, 13500)) : "";
+    var desktopUrl = cfg.claudeDesktopUrl + q;
+    var webUrl = cfg.claudeWebUrl + q;
     copyText(prompt).then(function (copied) {
-      var url = cfg.claudeUrl + (cfg.claudePrefill ? "?q=" + encodeURIComponent(prompt) : "");
-      openUrl(url);
-      msgBox.hidden = false;
-      msgBox.textContent = copied
-        ? "Claude wird geöffnet. Der Auftrag liegt zusätzlich in der Zwischenablage – falls das Eingabefeld leer ist, mit Cmd+V bzw. Strg+V einfügen."
-        : "Claude wird geöffnet. Bitte den Auftrag unten markieren und kopieren:";
+      openDesktop(desktopUrl);
+      msgBox.hidden = false; msgBox.className = "ok";
+      clear(msgBox);
+      msgBox.appendChild(el("div", "", "Claude-App wird geöffnet, der Auftrag steht im Eingabefeld." +
+        (copied ? " Er liegt zusätzlich in der Zwischenablage (Cmd+V bzw. Strg+V)." : "")));
+      var row = el("div", "row wrap");
+      row.style.marginTop = "6px";
+      var a1 = el("a", "", "Claude-App öffnen");
+      a1.href = desktopUrl;
+      a1.addEventListener("click", function (ev) { ev.preventDefault(); openDesktop(desktopUrl); });
+      var a2 = el("a", "", "Stattdessen im Browser öffnen");
+      a2.href = webUrl;
+      a2.addEventListener("click", function (ev) { ev.preventDefault(); openUrl(webUrl); });
+      row.appendChild(a1); row.appendChild(el("span", "muted", "·")); row.appendChild(a2);
+      msgBox.appendChild(row);
       if (!copied) {
         var pre = el("textarea", "");
         pre.rows = 6; pre.readOnly = true; pre.value = prompt;
@@ -220,7 +284,7 @@
         language: state.language,
         instruction: $("replyText").value.trim(),
         attachments: $("replyAttach").value.trim()
-      }), $("replyMsg"));
+      }), $("handoffMsg"));
     });
     // Angeheftete Seitenleiste: bei Wechsel der Mail neu laden
     try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, load); } catch (e) { /* ältere Clients */ }

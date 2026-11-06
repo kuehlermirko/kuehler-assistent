@@ -8,9 +8,10 @@
     // Microsoft-Graph-Berechtigungen (nur lesend)
     graphScopes: ["User.Read", "Mail.Read", "Files.Read"],
 
-    // Übergabe an Claude
-    claudeUrl: "https://claude.ai/new",
-    // true: Auftrag wird zusätzlich als ?q=… mitgegeben (vorausgefüllt, falls Claude das unterstützt)
+    // Übergabe an Claude: zuerst die Desktop-App (claude://), Browser nur als Ausweichweg
+    claudeDesktopUrl: "claude://claude.ai/new",
+    claudeWebUrl: "https://claude.ai/new",
+    // true: Auftrag wird als ?q=… vorausgefüllt (max. ca. 14.000 Zeichen)
     claudePrefill: true,
 
     // Eigene Domains (Mails von hier gelten als intern)
