@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kühler-Assistent</title>
+<link rel="stylesheet" href="taskpane.css">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script src="msal-browser.min.js"></script>
+<script src="config.js"></script>
+<script src="classifier.js"></script>
+<script src="graph.js"></script>
+</head>
+<body>
+<header class="top">
+  <span class="logo" aria-hidden="true">K</span>
+  <span class="title">Kühler-Assistent</span>
+  <button id="btnSettings" class="icon" aria-label="Einstellungen" title="Einstellungen">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+  </button>
+</header>
+
+<main id="app">
+  <section id="settings" class="card" hidden>
+    <h2>Einstellungen</h2>
+    <label class="field">
+      <span>Kühler-Gehirn: Ordner in deinem OneDrive</span>
+      <input id="setVaultPath" placeholder="Obsidian/Kühler">
+      <small>Leer lassen, wenn du keinen Obsidian-Vault nutzt.</small>
+    </label>
+    <label class="field">
+      <span>Name des Vaults in Obsidian</span>
+      <input id="setVaultName" placeholder="Kühler">
+    </label>
+    <div class="row">
+      <button id="btnSaveSettings" class="primary">Speichern</button>
+      <span id="settingsMsg" class="muted"></span>
+    </div>
+  </section>
+
+  <p id="loading" class="muted">Mail wird gelesen …</p>
+
+  <div id="content" hidden>
+    <section class="card">
+      <div class="label">Erkannt</div>
+      <div class="row wrap"><span id="typeBadge" class="badge"></span></div>
+      <div id="vorgang" class="vorgang"></div>
+      <div id="partner" class="muted small"></div>
+    </section>
+
+    <section class="card accent">
+      <div class="label">An Claude übergeben</div>
+      <p id="task" class="task"></p>
+      <div id="skills" class="chips"></div>
+      <button id="btnHandoff" class="primary wide">An Claude übergeben</button>
+      <div id="handoffMsg" class="ok" hidden></div>
+    </section>
+
+    <section class="card">
+      <div class="label">Antwort mit Claude</div>
+      <div class="chips" id="toneChips" role="group" aria-label="Ton"></div>
+      <div class="chips" id="langChips" role="group" aria-label="Sprache"></div>
+      <label class="field">
+        <span>Was soll die Antwort sagen?</span>
+        <textarea id="replyText" rows="3" placeholder="Zusage, Termin passt, Unterlagen bis Freitag"></textarea>
+      </label>
+      <label class="field">
+        <span>Anhänge für die Antwort (optional)</span>
+        <input id="replyAttach" placeholder="AB-PDF aus SelectLine, Bestell-PDF">
+      </label>
+      <button id="btnReply" class="secondary wide">Antwort mit Claude entwerfen</button>
+      <div id="replyMsg" class="ok" hidden></div>
+    </section>
+
+    <section class="card" id="brainCard">
+      <div class="label">Aus dem Kühler-Gehirn</div>
+      <div id="brain" class="list"><span class="muted small">Wird geladen …</span></div>
+    </section>
+
+    <section class="card">
+      <div class="label">Frühere Mails zum Vorgang</div>
+      <div id="history" class="list"><span class="muted small">Wird geladen …</span></div>
+    </section>
+  </div>
+
+  <p class="foot">Der Assistent legt nur Entwürfe an – gesendet wird ausschließlich von dir.</p>
+</main>
+
+<textarea id="clip" aria-hidden="true" tabindex="-1"></textarea>
+<script src="taskpane.js"></script>
+</body>
+</html>
