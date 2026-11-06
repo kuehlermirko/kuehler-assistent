@@ -4,7 +4,7 @@
   var cfg = window.KUEHLER_CONFIG;
   var C = window.KuehlerClassifier;
   var G = window.KuehlerGraph;
-  var state = { mail: null, result: null, loadId: 0 };
+  var state = { mail: null, result: null, handoff: null, loadId: 0 };
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -57,6 +57,43 @@
   }
 
   /* ---------- Darstellung ---------- */
+  /* Aktiver Übergabe-Auftrag: erkannter Typ oder manuell gewählter Skill */
+  function renderHandoff() {
+    var h = state.handoff;
+    $("task").textContent = h.task;
+    var sk = $("skills"); clear(sk);
+    h.skills.forEach(function (s) { sk.appendChild(el("span", "skill", s)); });
+    $("btnHandoff").textContent = h.skill ? "An Claude übergeben (/" + h.skill + ")" : "An Claude übergeben";
+    $("handoffMsg").hidden = true;
+  }
+  function fillSkillSelect() {
+    var sel = $("skillSelect"); clear(sel);
+    var first = el("option", "", "Wie erkannt" + (state.result.skill ? " (/" + state.result.skill + ")" : ""));
+    first.value = "";
+    sel.appendChild(first);
+    (cfg.skillMenu || []).forEach(function (m) {
+      var o = el("option", "", m[1] + "  (/" + m[0] + ")");
+      o.value = m[0];
+      sel.appendChild(o);
+    });
+    sel.value = "";
+  }
+  function pickSkill(id) {
+    var r = state.result;
+    if (!id) { state.handoff = r; }
+    else {
+      var label = id;
+      (cfg.skillMenu || []).forEach(function (m) { if (m[0] === id) label = m[1]; });
+      var copy = {};
+      Object.keys(r).forEach(function (k) { copy[k] = r[k]; });
+      copy.skill = id;
+      copy.skills = [id, "zweites-gehirn-kuehler"].filter(function (v, i, a) { return a.indexOf(v) === i; });
+      copy.task = label + " – aus dieser Mail heraus nach Hausablauf bearbeiten.";
+      state.handoff = copy;
+    }
+    renderHandoff();
+  }
+
   function renderResult() {
     var r = state.result;
     var badge = $("typeBadge");
@@ -64,11 +101,9 @@
     badge.className = "badge t-" + r.tone;
     $("vorgang").textContent = r.vorgang;
     $("partner").textContent = (r.via ? r.partner : (state.mail.fromName || state.mail.fromAddress)) + (state.mail.attachments.length ? " · " + state.mail.attachments.length + (state.mail.attachments.length === 1 ? " Anhang" : " Anhänge") : "");
-    $("task").textContent = r.task;
-    var sk = $("skills"); clear(sk);
-    r.skills.forEach(function (s) { sk.appendChild(el("span", "skill", s)); });
-    $("btnHandoff").textContent = r.skill ? "An Claude übergeben (/" + r.skill + ")" : "An Claude übergeben";
-    $("handoffMsg").hidden = true;
+    fillSkillSelect();
+    state.handoff = r;
+    renderHandoff();
   }
 
   function showError(container, prefix, err) {
@@ -187,8 +222,9 @@
       var s = $("settings"); s.hidden = !s.hidden; $("settingsMsg").textContent = "";
     });
     $("btnSaveSettings").addEventListener("click", saveSettings);
+    $("skillSelect").addEventListener("change", function () { pickSkill(this.value); });
     $("btnHandoff").addEventListener("click", function () {
-      handoff(C.buildHandoffPrompt(state.mail, state.result), $("handoffMsg"));
+      handoff(C.buildHandoffPrompt(state.mail, state.handoff || state.result), $("handoffMsg"));
     });
     // Angeheftete Seitenleiste: bei Wechsel der Mail neu laden
     try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, load); } catch (e) { /* ältere Clients */ }

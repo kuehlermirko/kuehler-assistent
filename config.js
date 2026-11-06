@@ -57,6 +57,62 @@
         skill: "lieferantenangebote-einlesen",
         skills: ["lieferantenangebote-einlesen", "preisbasis-kalibrierung", "lieferanten-nachfassen-mirko"]
       },
+      rfq_gdels: {
+        label: "Kundenanfrage GDELS-Mowag",
+        tone: "rfq",
+        task: "Neue GDELS-Mowag-Anfrage nach Hausablauf starten: AN-Nummer, Projektstruktur, Sichtung ALLER Zeichnungen, danach Rückfragen zu Umfang und Paketen.",
+        skill: "anfragetool",
+        skills: ["anfragetool", "anfragetool-gdels", "kuehler-anfrage-deckblatt", "kuehler-planner-aufgaben"]
+      },
+      richtpreis: {
+        label: "Richtpreisanfrage",
+        tone: "rfq",
+        task: "Richtpreis-Kalkulation aus Zeichnung und STEP erstellen; vorher AN-Nr., Stückzahl und Ansätze klären und Faktor aus der Preisbasis-Kalibrierung nennen.",
+        skill: "richtpreis-kalkulation",
+        skills: ["richtpreis-kalkulation", "preisbasis-kalibrierung", "zweites-gehirn-kuehler"]
+      },
+      kunden_ab: {
+        label: "Auftrag / AU zum Kunden",
+        tone: "kunde",
+        task: "Stadler-Kalkulationstabelle zur Auftragsbestätigung (AU) erstellen bzw. aktualisieren und AB-Mail an den Kunden vorbereiten.",
+        skill: "stadler-kalkulationsexcel",
+        skills: ["stadler-kalkulationsexcel", "ab-mail-kunde", "zweites-gehirn-kuehler"]
+      },
+      spezifikation: {
+        label: "Stadler-Spezifikation",
+        tone: "kunde",
+        task: "Stadler-Spezifikation 1:1 als Kühler-Dokument (DEU/EN, ohne Stadler-Spur) umschreiben.",
+        skill: "stadler-spez-umschreiben",
+        skills: ["stadler-spez-umschreiben"]
+      },
+      rueckstaende: {
+        label: "Rückstandsliste",
+        tone: "kunde",
+        task: "Rückstandsliste auswerten; vorher Stichtage für den sicheren Umsatz vorschlagen und Freigabe abwarten.",
+        skill: "stadler-rueckstaende",
+        skills: ["stadler-rueckstaende"]
+      },
+      fai: {
+        label: "FAI / Erstmuster",
+        tone: "kunde",
+        task: "FAI nach EN 15085 CL1 bzw. Kundenvorgabe vorbereiten.",
+        skill: "kuehler-fai-cl1",
+        skills: ["kuehler-fai-cl1", "zweites-gehirn-kuehler"]
+      },
+      lieferant_rueckmeldung: {
+        label: "Lieferanten-Rückmeldung",
+        tone: "lief",
+        task: "Rückmeldung bzw. Absage des Lieferanten in der Rücklaufliste und Lieferantenbewertung erfassen.",
+        skill: "lieferanten-nachfassen-mirko",
+        skills: ["lieferanten-nachfassen-mirko", "lieferantenpool-mirko"]
+      },
+      werkstatt: {
+        label: "Werkstatt / Montage",
+        tone: "sonst",
+        task: "Werkstattauftrag und Montage zum Kundenauftrag bearbeiten (Ordner 08_Montage_Kühler, Werkstattbestellung, Werkauftrag, Montageplan).",
+        skill: "kuehler-werkstattauftrag-montage",
+        skills: ["kuehler-werkstattauftrag-montage", "selectline-bestellung"]
+      },
       rechnung: {
         label: "Rechnung",
         tone: "sonst",
@@ -78,7 +134,30 @@
         skill: "",
         skills: ["zweites-gehirn-kuehler"]
       }
-    }
+    },
+
+    // Auswahl „Anderer Skill“ in der Seitenleiste (Reihenfolge = Anzeige)
+    skillMenu: [
+      ["anfragetool", "Kundenanfrage bearbeiten (Anfragetool)"],
+      ["stadler-bestellungen", "Kundenbestellung Stadler (EB/PO/4500)"],
+      ["stadler-kalkulationsexcel", "Auftrag AU – Kalkulationstabelle"],
+      ["ab-mail-kunde", "AB-Mail an Kunden"],
+      ["richtpreis-kalkulation", "Richtpreis-Kalkulation"],
+      ["lieferantenpool-mirko", "Lieferantenanfrage versenden"],
+      ["lieferantenangebote-einlesen", "Lieferantenangebot einlesen"],
+      ["lieferanten-nachfassen-mirko", "Lieferanten nachfassen / Rücklauf"],
+      ["angebotsueberwachung-mirko", "Angebot beim Kunden nachfassen"],
+      ["selectline-bestellung", "Bestellung an Lieferant (SelectLine)"],
+      ["ab-nachfassen-mirko", "Lieferanten-AB prüfen / nachfassen"],
+      ["lieferanten-rueckstaende", "Lieferanten-Rückstände"],
+      ["stadler-rueckstaende", "Rückstandsliste Stadler"],
+      ["kuehler-werkstattauftrag-montage", "Werkstattauftrag / Montage"],
+      ["kuehler-fai-cl1", "FAI / Erstmuster"],
+      ["stadler-spez-umschreiben", "Stadler-Spezifikation umschreiben"],
+      ["projektmanagement", "Projektakte / Projektmanagement"],
+      ["kuehler-briefpapier", "Dokument auf Kühler-Briefpapier"],
+      ["zweites-gehirn-kuehler", "Nur Kühler-Gehirn fortschreiben"]
+    ]
   };
   if (typeof module !== "undefined" && module.exports) module.exports = config;
   else root.KUEHLER_CONFIG = config;

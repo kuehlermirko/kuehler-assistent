@@ -23,7 +23,13 @@
     rfq: /(\bRFQ\b|request\s+for\s+(a\s+)?quot|quotation\s+request|\banfrage\b|angebotsanfrage|preisanfrage|\binquiry\b|\benquiry\b|request\s+for\s+offer)/i,
     ab: /(auftragsbest(ä|ae)tigung|order\s+confirmation|best(ä|ae)tigung\s+ihrer\s+bestellung|confirmation\s+of\s+(your\s+)?order|\bAB[\s-]?Nr|\bAB\s?\d{3,})/i,
     angebot: /(\bangebot\b|\bquotation\b|\bquote\b|\boffer\b|\bofferte\b|\bpreisangebot\b)/i,
-    rechnung: /(\brechnung\b|\binvoice\b|\bgutschrift\b|\bcredit\s+note\b)/i
+    rechnung: /(\brechnung\b|\binvoice\b|\bgutschrift\b|\bcredit\s+note\b)/i,
+    spez: /(\b(AL|BU|BZ|PR)_[A-Z0-9]|\bTS-\d{3,4}\b|spezifikation|specification|technische\s+lieferbedingungen)/i,
+    fai: /(\bFAI\b|first\s+article|erstmuster|EMPB)/i,
+    richtpreis: /(richtpreis|budgetpreis|budget(ary)?\s+(price|quot)|indicative\s+price|grobkalkulation|hausnummer)/i,
+    rueckstand: /(ergebnismenge|r(ü|ue)ckstandsliste|r(ü|ue)ckst(ä|ae)nde\b|backlog)/i,
+    werkstatt: /(werkstattauftrag|werkstatt|montage)/i,
+    absage: /(\babsage\b|kein(en)?\s+angebot|leider\s+nicht\s+anbieten|nicht\s+anbieten\s+k(ö|oe)nnen|unable\s+to\s+(quote|offer)|decline\s+to\s+quote|no\s+quot(e|ation))/i
   };
 
   function uniq(arr) {
@@ -113,17 +119,28 @@
     }
     var customer = intern ? null : findCustomer(mail, cfg);
     var type;
+    // Betreff plus Dateinamen der Anhänge: hier stehen die verlässlichsten Signale
+    var head = subject + "\n" + (mail.attachments || []).join("\n");
 
-    if (intern) {
-      type = "intern";
+    if (RX.rueckstand.test(head)) {
+      type = "rueckstaende";
+    } else if (intern) {
+      if (RX.werkstatt.test(subject)) type = "werkstatt";
+      else if (/\bAU\s?\d{7}\b/i.test(head) && (RX.ab.test(head) || /(^|\n)AU\s?\d{7}/i.test((mail.attachments || []).join("\n")))) type = "kunden_ab";
+      else type = "intern";
     } else if (customer) {
-      if (RX.order.test(subject) && !RX.rfq.test(subject)) type = "kundenbestellung";
+      if (RX.spez.test(head)) type = "spezifikation";
+      else if (RX.fai.test(head)) type = "fai";
+      else if (RX.richtpreis.test(text)) type = "richtpreis";
+      else if (RX.order.test(subject) && !RX.rfq.test(subject)) type = "kundenbestellung";
       else if (RX.rfq.test(subject)) type = "rfq";
       else if (RX.order.test(body)) type = "kundenbestellung";
       else if (RX.rfq.test(body)) type = "rfq";
       else type = "sonstige";
+      if (type === "rfq" && customer === "GDELS-Mowag") type = "rfq_gdels";
     } else {
       if (RX.rechnung.test(subject)) type = "rechnung";
+      else if (RX.absage.test(text)) type = "lieferant_rueckmeldung";
       else if (RX.ab.test(subject)) type = "lieferanten_ab";
       else if (RX.angebot.test(subject)) type = "lieferantenangebot";
       else if (RX.ab.test(body)) type = "lieferanten_ab";
@@ -174,7 +191,10 @@
   }
 
   function buildHandoffPrompt(mail, result) {
-    var lines = mailHeader(mail, result);
+    var lines = [];
+    // Skill gleich in der ersten Zeile aufrufen, damit die neue Sitzung direkt damit startet
+    if (result.skill) lines.push("/" + result.skill);
+    lines = lines.concat(mailHeader(mail, result));
     lines.push("");
     lines.push("Auftrag: " + result.task);
     lines.push("Bitte die Mail samt Anhängen selbst über den Microsoft-365-Konnektor holen (Skill mail-holen) und vorher das Kühler-Gehirn prüfen.");
