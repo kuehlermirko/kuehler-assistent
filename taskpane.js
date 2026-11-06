@@ -4,8 +4,7 @@
   var cfg = window.KUEHLER_CONFIG;
   var C = window.KuehlerClassifier;
   var G = window.KuehlerGraph;
-  var T = window.KuehlerTemplates;
-  var state = { mail: null, result: null, tone: "Formell", language: "Deutsch", loadId: 0 };
+  var state = { mail: null, result: null, loadId: 0 };
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -70,70 +69,6 @@
     r.skills.forEach(function (s) { sk.appendChild(el("span", "skill", s)); });
     $("btnHandoff").textContent = r.skill ? "An Claude übergeben (/" + r.skill + ")" : "An Claude übergeben";
     $("handoffMsg").hidden = true;
-    $("outlookMsg").hidden = true;
-    $("replyText").value = "";
-    $("replyAttach").value = "";
-    state.tone = (r.type === "intern") ? "Kurz" : "Formell";
-    state.language = r.language;
-    renderChips();
-    var tl = $("templates"); clear(tl);
-    T.forType(r.type).forEach(function (t) {
-      var b = el("button", "secondary wide", t.label);
-      b.type = "button";
-      b.addEventListener("click", function () { openTemplate(t.id); });
-      tl.appendChild(b);
-    });
-  }
-
-  /* ---------- Direkt in Outlook: Vorlage im Antwort- bzw. Neu-Fenster öffnen ---------- */
-  function openTemplate(id) {
-    var msg = $("outlookMsg");
-    var mailbox = Office.context.mailbox;
-    var ctx = {
-      tone: state.tone,
-      language: state.language,
-      instruction: $("replyText").value.trim(),
-      me: mailbox.userProfile ? mailbox.userProfile.emailAddress : ""
-    };
-    if (id === "eigener_text" && !ctx.instruction) {
-      msg.hidden = false; msg.className = "err";
-      msg.textContent = "Bitte zuerst den eigenen Text eingeben.";
-      $("replyText").focus();
-      return;
-    }
-    var out = T.build(id, state.mail, state.result, ctx);
-    try {
-      var item = mailbox.item;
-      if (out.mode === "new") {
-        mailbox.displayNewMessageForm({ toRecipients: out.to || [], subject: out.subject || "", htmlBody: out.html });
-      } else if (out.mode === "replyAll") {
-        if (item.displayReplyAllFormAsync) item.displayReplyAllFormAsync({ htmlBody: out.html });
-        else item.displayReplyAllForm({ htmlBody: out.html });
-      } else {
-        if (item.displayReplyFormAsync) item.displayReplyFormAsync({ htmlBody: out.html });
-        else item.displayReplyForm({ htmlBody: out.html });
-      }
-      msg.hidden = false; msg.className = "ok";
-      msg.textContent = "In Outlook geöffnet." + (out.hint ? " " + out.hint : "");
-    } catch (e) {
-      msg.hidden = false; msg.className = "err";
-      msg.textContent = "Outlook konnte das Fenster nicht öffnen: " + (e && e.message ? e.message : e);
-    }
-  }
-
-  function chipGroup(container, values, current, onPick) {
-    clear(container);
-    values.forEach(function (v) {
-      var b = el("button", "chip", v);
-      b.type = "button";
-      b.setAttribute("aria-pressed", v === current ? "true" : "false");
-      b.addEventListener("click", function () { onPick(v); });
-      container.appendChild(b);
-    });
-  }
-  function renderChips() {
-    chipGroup($("toneChips"), ["Formell", "Kurz", "Freundschaftlich"], state.tone, function (v) { state.tone = v; renderChips(); });
-    chipGroup($("langChips"), ["Deutsch", "Englisch"], state.language, function (v) { state.language = v; renderChips(); });
   }
 
   function showError(container, prefix, err) {
@@ -175,28 +110,6 @@
         box.appendChild(d);
       });
     }).catch(function (e) { if (id === state.loadId) showError(box, "Kühler-Gehirn nicht erreichbar: ", e); });
-  }
-
-  /* ---------- Frühere Mails ---------- */
-  function loadHistory() {
-    var id = state.loadId;
-    var box = $("history");
-    if (!G.configured()) { showError(box, "", "Anmeldung noch nicht eingerichtet (Anwendungs-ID fehlt in config.js)."); return; }
-    clear(box); box.appendChild(el("span", "muted small", "Wird geladen …"));
-    G.history(state.mail, state.result).then(function (items) {
-      if (id !== state.loadId) return;
-      clear(box);
-      if (!items.length) { box.appendChild(el("span", "muted small", "Keine früheren Mails gefunden.")); return; }
-      items.forEach(function (m) {
-        var row = el("div", "hist");
-        row.appendChild(el("span", "d", C.fmtDate(m.date).split(",")[0]));
-        var a = el("a", "", m.subject + (m.from ? " – " + m.from : ""));
-        a.href = m.link || "#";
-        a.addEventListener("click", function (ev) { ev.preventDefault(); if (m.link) openUrl(m.link); });
-        row.appendChild(a);
-        box.appendChild(row);
-      });
-    }).catch(function (e) { if (id === state.loadId) showError(box, "Mailverlauf nicht abrufbar: ", e); });
   }
 
   /* ---------- Übergabe an Claude ---------- */
@@ -261,7 +174,6 @@
       $("content").hidden = false;
       renderResult();
       loadBrain();
-      loadHistory();
     });
   }
 
@@ -277,14 +189,6 @@
     $("btnSaveSettings").addEventListener("click", saveSettings);
     $("btnHandoff").addEventListener("click", function () {
       handoff(C.buildHandoffPrompt(state.mail, state.result), $("handoffMsg"));
-    });
-    $("btnReply").addEventListener("click", function () {
-      handoff(C.buildReplyPrompt(state.mail, state.result, {
-        tone: state.tone,
-        language: state.language,
-        instruction: $("replyText").value.trim(),
-        attachments: $("replyAttach").value.trim()
-      }), $("handoffMsg"));
     });
     // Angeheftete Seitenleiste: bei Wechsel der Mail neu laden
     try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, load); } catch (e) { /* ältere Clients */ }

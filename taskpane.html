@@ -9,7 +9,6 @@
 <script src="msal-browser.min.js"></script>
 <script src="config.js"></script>
 <script src="classifier.js"></script>
-<script src="templates.js"></script>
 <script src="graph.js"></script>
 </head>
 <body>
@@ -49,44 +48,22 @@
       <div id="partner" class="muted small"></div>
     </section>
 
-    <section class="card accent">
-      <div class="label">Direkt in Outlook</div>
-      <div class="chips" id="toneChips" role="group" aria-label="Ton"></div>
-      <div class="chips" id="langChips" role="group" aria-label="Sprache"></div>
-      <div id="templates" class="list"></div>
-      <label class="field">
-        <span>Eigener Text für die Antwort</span>
-        <textarea id="replyText" rows="3" placeholder="Zusage, Termin passt, Unterlagen bis Freitag"></textarea>
-      </label>
-      <div id="outlookMsg" class="ok" hidden></div>
-      <small class="muted">Outlook öffnet die Antwort sofort und setzt die Signatur „Kühler“. Gelb markierte Stellen vor dem Senden ergänzen.</small>
-    </section>
-
-    <section class="card">
-      <div class="label">An Claude übergeben</div>
-      <p id="task" class="task"></p>
-      <div id="skills" class="chips"></div>
-      <button id="btnHandoff" class="primary wide">An Claude übergeben</button>
-      <label class="field">
-        <span>Anhänge für eine Antwort durch Claude (optional)</span>
-        <input id="replyAttach" placeholder="AB-PDF aus SelectLine, Bestell-PDF">
-      </label>
-      <button id="btnReply" class="secondary wide">Antwort von Claude ausformulieren lassen</button>
-      <div id="handoffMsg" class="ok" hidden></div>
-    </section>
-
     <section class="card" id="brainCard">
       <div class="label">Aus dem Kühler-Gehirn</div>
       <div id="brain" class="list"><span class="muted small">Wird geladen …</span></div>
     </section>
 
-    <section class="card">
-      <div class="label">Frühere Mails zum Vorgang</div>
-      <div id="history" class="list"><span class="muted small">Wird geladen …</span></div>
+    <section class="card accent">
+      <div class="label">An Claude-Desktop übergeben</div>
+      <p id="task" class="task"></p>
+      <div id="skills" class="chips"></div>
+      <button id="btnHandoff" class="primary wide">An Claude übergeben</button>
+      <div id="handoffMsg" class="ok" hidden></div>
+      <small class="muted">Für Abläufe mit SelectLine, Projektordnern, Kalkulation und Lieferantenanfragen. Antworten und Zusammenfassungen direkt über Claude for Outlook.</small>
     </section>
   </div>
 
-  <p class="foot">Der Assistent legt nur Entwürfe an – gesendet wird ausschließlich von dir.</p>
+  <p class="foot">Der Assistent liest nur – er sendet, löscht und verschiebt nichts.</p>
 </main>
 
 <textarea id="clip" aria-hidden="true" tabindex="-1"></textarea>
