@@ -111,13 +111,14 @@
   }
 
   /* ---------- Teile-Index ---------- */
-  function splitLine(line) {
-    if (line.indexOf('"') < 0) return line.split(";");
+  function splitLine(line, delim) {
+    delim = delim || ";";
+    if (line.indexOf('"') < 0) return line.split(delim);
     var out = [], cur = "", inq = false;
     for (var i = 0; i < line.length; i++) {
       var c = line[i];
       if (c === '"') { if (inq && line[i + 1] === '"') { cur += '"'; i++; } else inq = !inq; }
-      else if (c === ";" && !inq) { out.push(cur); cur = ""; }
+      else if (c === delim && !inq) { out.push(cur); cur = ""; }
       else cur += c;
     }
     out.push(cur);
@@ -134,26 +135,71 @@
       var f = splitLine(lines[k]);
       var nr = (f[iNr] || "").trim();
       if (!nr) continue;
-      map.set(nr.toUpperCase(), {
+      var rec = {
         nummer: nr, kid: (f[iKid] || "").trim(), bezeichnung: (f[iBez] || "").trim(), an: (f[iAn] || "").trim(),
         rma: iRma >= 0 ? (f[iRma] || "").trim() : "", von: (f[iFirst] || "").trim(), bis: (f[iLast] || "").trim()
-      });
+      };
+      map.set(nr.toUpperCase(), rec);
+      rec.kid.split(/[,\s]+/).forEach(function (k) { if (k && !map.has("KID:" + k)) map.set("KID:" + k, rec); });
     }
     return map;
   }
-  /* Kandidaten: Zeichnungs-/Artikelnummern mit mind. 6 Ziffern, auch mit Index-Endung */
-  function partTokens(mail) {
-    var text = (mail.subject || "") + "\n" + (mail.body || "") + "\n" + (mail.attachments || []).join("\n");
+  /* Kandidaten: Zeichnungs-/Artikelnummern und KIDs mit mind. 6 Ziffern, auch mit Index-Endung */
+  function textTokens(text) {
     var rx = /\b[A-Z]{0,4}\d[A-Z0-9]{5,15}(?:[_\-.][A-Z0-9]{1,5})?\b/gi, m, set = {};
     while ((m = rx.exec(text)) !== null) {
       var t = m[0].toUpperCase();
       if ((t.match(/\d/g) || []).length < 6) continue;
-      if (/^(AN|AU|BE|RE|EB)\d{7}$/.test(t) || /^20\d{6}$/.test(t)) continue;
+      if (/^(AN|AU|BE|RE|EB|AB|LS)\d{7}$/.test(t) || /^20\d{6}$/.test(t)) continue;
       set[t] = 1;
       var stem = t.split(/[_\-.]/)[0];
       if (stem !== t && stem.length >= 6) set[stem] = 1;
     }
     return Object.keys(set);
+  }
+  function partTokens(mail) {
+    return textTokens((mail.subject || "") + "\n" + (mail.body || "") + "\n" + (mail.attachments || []).join("\n"));
+  }
+  /* Kompletter SelectLine-Artikelstamm (export.csv): Schlüssel KID, Kundenartikelnummer, Zeichnungsnummer */
+  function parseStamm(text) {
+    var lines = String(text).replace(/^\uFEFF/, "").split(/\r?\n/);
+    var delim = (lines[0] || "").split(";").length > (lines[0] || "").split(",").length ? ";" : ",";
+    var head = splitLine(lines[0] || "", delim).map(function (h) { return h.trim().toLowerCase(); });
+    function col(names) { for (var i = 0; i < head.length; i++) for (var j = 0; j < names.length; j++) if (head[i].indexOf(names[j]) === 0) return i; return -1; }
+    var iKid = col(["kühler id", "kuehler id", "kid"]), iBez = col(["bezeichnung"]), iZus = col(["zusatz"]), iKd = col(["kundenartikel"]),
+      iZng = col(["zeichungsnummer", "zeichnungsnummer"]), iIdx = col(["index"]), iSl = col(["stueckliste", "stückliste"]);
+    var map = new Map();
+    function key(k, rec) { k = String(k || "").trim().toUpperCase(); if (k.length >= 5 && !map.has(k)) map.set(k, rec); var c = k.replace(/[\s\-.]/g, ""); if (c !== k && c.length >= 6 && !map.has(c)) map.set(c, rec); }
+    for (var n = 1; n < lines.length; n++) {
+      if (!lines[n]) continue;
+      var f = splitLine(lines[n], delim);
+      var kid = (f[iKid] || "").trim();
+      if (!kid) continue;
+      var rec = { kid: kid, bezeichnung: (f[iBez] || "").trim(), zusatz: iZus >= 0 ? (f[iZus] || "").trim() : "", kdnr: iKd >= 0 ? (f[iKd] || "").trim() : "",
+        zng: iZng >= 0 ? (f[iZng] || "").trim() : "", index: iIdx >= 0 ? (f[iIdx] || "").trim() : "", sl: iSl >= 0 ? (f[iSl] || "").trim() : "" };
+      map.set("KID:" + kid, rec);
+      if (/^\d{6,}$/.test(kid) && !map.has(kid)) map.set(kid, rec);
+      key(rec.kdnr, rec); key(rec.zng, rec);
+    }
+    return map;
+  }
+  /* Treffer aus beiden Quellen zusammenführen: Stamm (KID, Bezeichnung) und Teile-Index (frühere AN, Reklamationen) */
+  function matchAll(sources, stamm, index) {
+    var hits = [], seen = {}, checked = 0;
+    sources.forEach(function (src) {
+      src.tokens.forEach(function (t) {
+        checked++;
+        var rec = stamm ? stamm.get(t) : null;
+        var hist = index ? (index.get(t) || (rec && (index.get(String(rec.kdnr).toUpperCase()) || index.get(String(rec.zng).toUpperCase()) || index.get("KID:" + rec.kid)))) : null;
+        if (!rec && hist && hist.kid && stamm) rec = stamm.get("KID:" + hist.kid.split(/[,\s]+/)[0]) || null;
+        if (!rec && !hist) return;
+        var id = rec ? "K" + rec.kid : "N" + hist.nummer;
+        if (seen[id]) { if (seen[id].quellen.indexOf(src.name) < 0) seen[id].quellen.push(src.name); return; }
+        var h = { token: t, rec: rec, hist: hist, quellen: [src.name] };
+        seen[id] = h; hits.push(h);
+      });
+    });
+    return { hits: hits, checked: checked };
   }
   function matchParts(mail, map) {
     var toks = partTokens(mail), hits = [], seen = {};
@@ -164,7 +210,7 @@
     return { hits: hits, checked: toks.length };
   }
 
-  var api = { deadlines: deadlines, newPart: newPart, parse: parse, partTokens: partTokens, matchParts: matchParts };
+  var api = { deadlines: deadlines, newPart: newPart, parse: parse, parseStamm: parseStamm, textTokens: textTokens, partTokens: partTokens, matchParts: matchParts, matchAll: matchAll };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else { root.KuehlerFristen = api; root.KuehlerTeile = api; }
 })(this);

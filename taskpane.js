@@ -50,6 +50,8 @@
           fromAddress: from.emailAddress || "",
           received: item.dateTimeCreated,
           messageId: item.internetMessageId || "",
+          conversationId: item.conversationId || "",
+          to: (item.to || []).concat(item.cc || []).map(function (x) { return { name: x.displayName || "", address: x.emailAddress || "" }; }),
           body: body,
           restId: (function () { try { return Office.context.mailbox.convertToRestId(item.itemId, Office.MailboxEnums.RestVersion.v2_0); } catch (e) { return ""; } })(),
           attachmentItems: (item.attachments || []).filter(function (a) { return !a.isInline; }).map(function (a) { return { id: a.id, name: a.name, size: a.size, type: a.attachmentType }; }),
@@ -196,18 +198,68 @@
     function z(v) { return (v < 10 ? "0" : "") + v; }
     return z(x.getDate()) + "." + z(x.getMonth() + 1) + "." + x.getFullYear();
   }
+  var SUPPLIER_TYPES = ["eigene_bestellung", "lieferantenangebot", "lieferant_rueckmeldung", "lieferanten_korrespondenz", "lieferanten_ab", "lieferanten_bestellung"];
+  var AB07 = "07_Auftragsbearbeitung/04_Bestellungen_Lieferanten", KORR07 = "07_Auftragsbearbeitung/02_Lieferantenkorrespondenz";
   function defaultTarget(type, folder) {
-    var want = { rfq: "01_Kundenanfrage", rfq_gdels: "01_Kundenanfrage", richtpreis: "01_Kundenanfrage", spezifikation: "01_Kundenanfrage",
-      kundenbestellung: "07_Auftragsbearbeitung", kunden_ab: "07_Auftragsbearbeitung", lieferanten_ab: "07_Auftragsbearbeitung", fai: "07_Auftragsbearbeitung",
-      lieferantenangebot: "04_Anfragen", lieferant_rueckmeldung: "04_Anfragen", lieferanten_korrespondenz: "04_Anfragen", lieferanten_bestellung: "07_Auftragsbearbeitung" }[type] || "_Mail-Eingang";
-    return want;
+    var has07 = folder && folder.subfolders.some(function (s) { return s.name === "07_Auftragsbearbeitung"; });
+    var r = state.result;
+    if (type === "lieferanten_ab" || type === "lieferanten_bestellung" || type === "eigene_bestellung") return has07 ? AB07 : "05_Angebote";
+    if (SUPPLIER_TYPES.indexOf(type) >= 0) return has07 && r.refs.be.length ? KORR07 : "05_Angebote";
+    return { rfq: "01_Kundenanfrage", rfq_gdels: "01_Kundenanfrage", richtpreis: "01_Kundenanfrage", spezifikation: "01_Kundenanfrage",
+      kundenbestellung: "07_Auftragsbearbeitung/01_Kundenbestellung", kunden_ab: "07_Auftragsbearbeitung/03_Auftragsbestaetigung",
+      fai: "07_Auftragsbearbeitung" }[type] || "_Mail-Eingang";
+  }
+  /* Dateinamen nach Hausformat: Umlaute umschreiben, Sonderzeichen entfernen */
+  function fileSafe(s) {
+    return String(s || "").replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/Ä/g, "Ae").replace(/Ö/g, "Oe").replace(/Ü/g, "Ue").replace(/ß/g, "ss")
+      .replace(/[\\/:*?"<>|#%]/g, "").replace(/\s+/g, " ").trim();
+  }
+  function shortName(s) { return fileSafe(s).replace(/\s+/g, "-"); }
+  /* Lieferantenname: Rücklaufliste, sonst Firmenteil im Absendernamen, sonst Domain */
+  function supplierGuess() {
+    if (state.rueckName) return state.rueckName;
+    var r = state.result, name = String(r.partner || "").replace(/\s*\((über|Bestellung von).*\)$/, "");
+    var m = name.match(/\s[-–]\s+(.+)$/);
+    var company = m ? m[1] : "";
+    var legal = /\b(GmbH|mbH|AG|KG|Co\.?|s\.?r\.?o\.?|Ltd\.?|SE|e\.K\.|OHG|Sp\.? z o\.?o\.?|Kft\.?|S\.?A\.?|&)\b/gi;
+    if (company) return fileSafe(company.replace(legal, "")).replace(/\s+/g, " ").trim();
+    var adr = r.partnerAddress || state.mail.fromAddress || "";
+    var dom = C.domainOf(adr).split(".");
+    if (dom.length < 2) return "";
+    var label = dom[dom.length - 2];
+    if (/^(gmail|gmx|web|t-online|outlook|hotmail|yahoo|icloud|freenet|aol|mail)$/.test(label)) {
+      if (dom.length > 2) label = dom[dom.length - 3];            // z. B. tetopont.t-online.hu
+      else {
+        var local = adr.split("@")[0];
+        if (!/^(info|office|postmaster|mail|kontakt|contact|sales|verkauf)$/i.test(local) && name.indexOf("@") < 0) return fileSafe(name.split(/\s+/).slice(-1)[0] || "");
+        return fileSafe(local);
+      }
+    }
+    return label.split("-").map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1); }).join("-");
+  }
+  function norm(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  /* Vorhandenen Lieferantenordner im Ziel bevorzugen (z. B. „Rock-Color“ statt neu „Rockenstein“) */
+  function refreshLieferantOrdner() {
+    var f = state.folder, ziel = $("ablageZiel").value, inp = $("ablageLief"), dl = $("ablageLiefList");
+    if (!f) return;
+    var id = state.loadId;
+    G.childNamesByPath(f, ziel).then(function (c) {
+      if (id !== state.loadId || $("ablageZiel").value !== ziel) return;
+      clear(dl);
+      c.folders.forEach(function (n) { var o = document.createElement("option"); o.value = n; dl.appendChild(o); });
+      if (inp.dataset.touched) return;
+      var g = norm(inp.value);
+      if (!g) return;
+      var hit = c.folders.filter(function (n) { var k = norm(n); return k && (k === g || k.indexOf(g) >= 0 || g.indexOf(k) >= 0); })[0];
+      if (hit) inp.value = hit;
+    });
   }
   function loadProjekt() {
     var id = state.loadId, box = $("projekt");
     clear(box);
     $("ablageCard").hidden = true;
     var r = state.result;
-    var hasRef = r.refs.an.length || r.refs.po.length || (r.refs.po2 || []).length || r.refs.eb.length || r.refs.sap.length || (r.refs.gdels || []).length;
+    var hasRef = r.refs.an.length || r.refs.be.length || r.refs.po.length || (r.refs.po2 || []).length || r.refs.eb.length || r.refs.sap.length || (r.refs.gdels || []).length;
     if (!G.configured() || !hasRef) { renderAblage(null); return; }
     box.appendChild(el("span", "muted small", "Projektordner wird gesucht …"));
     G.projectFolder(r).then(function (f) {
@@ -262,13 +314,37 @@
     var sel = $("ablageZiel"); clear(sel);
     var want = defaultTarget(state.result.type, folder);
     var names = folder.subfolders.map(function (s) { return s.name; });
-    if (names.indexOf(want) < 0) names.push(want);
+    var has07 = names.indexOf("07_Auftragsbearbeitung") >= 0;
+    var extra = [want];
+    if (has07) extra = extra.concat(["07_Auftragsbearbeitung/01_Kundenbestellung", KORR07, "07_Auftragsbearbeitung/03_Auftragsbestaetigung", AB07]);
+    extra.forEach(function (n) { if (names.indexOf(n) < 0) names.push(n); });
     names.sort().forEach(function (n) {
-      var o = el("option", "", n + (folder.subfolders.some(function (s) { return s.name === n; }) ? "" : " (wird angelegt)"));
+      var top = n.split("/")[0], exists = folder.subfolders.some(function (s) { return s.name === top; });
+      var o = el("option", "", n + (exists ? "" : " (wird angelegt)"));
       o.value = n; sel.appendChild(o);
     });
     sel.value = want;
+    var inp = $("ablageLief"); delete inp.dataset.touched;
+    inp.value = SUPPLIER_TYPES.indexOf(state.result.type) >= 0 ? supplierGuess() : "";
+    refreshLieferantOrdner();
+    // Gesamter Verlauf: nur anbieten, wenn mehr als diese eine Mail dazugehört
+    $("ablageThreadRow").hidden = true; $("ablageThread").checked = false; state.thread = [];
+    var id = state.loadId;
+    G.conversation(state.mail.conversationId).then(function (list) {
+      if (id !== state.loadId) return;
+      state.thread = list;
+      if (list.length > 1) { $("ablageThreadRow").hidden = false; $("ablageThreadText").textContent = "Gesamten Mailverlauf ablegen (" + list.length + " Mails, bereits abgelegte werden übersprungen)"; }
+    }).catch(function () { /* ohne Verlauf weiter */ });
   }
+  function mailFileName(dateStr, sender, typ, ref) {
+    var d = new Date(dateStr || Date.now());
+    function z(v) { return (v < 10 ? "0" : "") + v; }
+    var stamp = d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()) + "_" + z(d.getHours()) + z(d.getMinutes());
+    return [stamp, shortName(sender) || "Mail", typ].concat(ref ? [ref] : []).join("_") + ".eml";
+  }
+  var TYP_KURZ = { eigene_bestellung: "Bestellung", lieferanten_ab: "AB", lieferantenangebot: "Angebot", lieferant_rueckmeldung: "Rueckmeldung", lieferanten_korrespondenz: "Korrespondenz",
+    lieferanten_bestellung: "Lieferstatus", kundenbestellung: "Bestellung", kunden_ab: "AB-Kunde", rfq: "Anfrage", rfq_gdels: "Anfrage", richtpreis: "Richtpreisanfrage",
+    spezifikation: "Spezifikation", fai: "FAI", rechnung: "Rechnung" };
   function attachmentBytes(id) {
     return new Promise(function (resolve, reject) {
       Office.context.mailbox.item.getAttachmentContentAsync(id, function (r) {
@@ -289,30 +365,55 @@
     var f = state.folder; if (!f) return;
     var picks = Array.prototype.slice.call(document.querySelectorAll("#ablageList input[type=checkbox]")).filter(function (c) { return c.checked; })
       .map(function (c) { return state.mail.attachmentItems[+c.dataset.idx]; });
-    var withEml = $("ablageEml").checked;
-    if (!picks.length && !withEml) { msg.hidden = false; msg.className = "err"; msg.textContent = "Bitte mindestens eine Datei auswählen."; return; }
+    var withEml = $("ablageEml").checked, withThread = !$("ablageThreadRow").hidden && $("ablageThread").checked;
+    if (!picks.length && !withEml && !withThread) { msg.hidden = false; msg.className = "err"; msg.textContent = "Bitte mindestens eine Datei auswählen."; return; }
     btn.disabled = true; msg.hidden = false; msg.className = "ok"; msg.textContent = "Wird abgelegt …";
-    var done = [], failed = [];
+    var done = [], failed = [], skipped = 0;
+    var lief = fileSafe($("ablageLief").value);
+    var rel = $("ablageZiel").value + (lief ? "/" + lief : "");
     try {
-      var target = await G.ensureSubfolder(f, $("ablageZiel").value);
+      var target = await G.ensurePath(f, rel);
+      var existing = (await G.childNamesByPath(f, rel)).files;
+      function has(prefix) { return existing.some(function (n) { return n.indexOf(prefix) === 0; }); }
+      var r = state.result, ref = (r.refs.be[0] || r.refs.au[0] || r.refs.an[0] || "");
+      var d0 = new Date(state.mail.received || Date.now());
+      var day = d0.getFullYear() + "-" + ("0" + (d0.getMonth() + 1)).slice(-2) + "-" + ("0" + d0.getDate()).slice(-2);
       for (var i = 0; i < picks.length; i++) {
         try {
           var a = picks[i], bytes = await attachmentBytes(a.id);
           var name = a.type === "item" && !/\.eml$/i.test(a.name) ? a.name + ".eml" : a.name;
-          await G.upload(f.driveId, target.id, name, bytes); done.push(name);
+          if (lief && !/^\d{4}-\d{2}-\d{2}/.test(name)) name = day + "_" + shortName(lief) + "_" + fileSafe(name);
+          if (existing.indexOf(name) >= 0) { skipped++; continue; }
+          await G.upload(f.driveId, target.id, name, bytes); done.push(name); existing.push(name);
         } catch (e) { failed.push(picks[i].name + " (" + (e.message || e) + ")"); }
+      }
+      var own = cfg.ownDomains.map(function (x) { return x.toLowerCase(); });
+      function senderOf(m) {
+        var adr = (m.from && m.from.emailAddress && m.from.emailAddress.address || "").toLowerCase();
+        return own.indexOf(C.domainOf(adr)) >= 0 ? "Kuehler" : (lief || supplierGuess() || C.domainOf(adr));
       }
       if (withEml) {
         try {
           if (!state.mail.restId) throw new Error("Mail-ID fehlt");
-          var d = new Date(state.mail.received || Date.now());
-          var nm = d.toISOString().slice(0, 10) + "_" + (state.mail.subject || "Mail").replace(/^(AW|WG|RE|FW|Fwd)\s*:\s*/gi, "").slice(0, 80) + ".eml";
-          await G.upload(f.driveId, target.id, nm, await G.mailMime(state.mail.restId)); done.push(nm);
+          var nm = mailFileName(state.mail.received, senderOf({ from: { emailAddress: { address: state.mail.fromAddress } } }), TYP_KURZ[r.type] || "Mail", ref);
+          if (has(nm.split("_").slice(0, 3).join("_") + "_")) skipped++;
+          else { await G.upload(f.driveId, target.id, nm, await G.mailMime(state.mail.restId)); done.push(nm); existing.push(nm); }
         } catch (e) { failed.push("Mail als .eml (" + (e.message || e) + ")"); }
+      }
+      if (withThread) {
+        for (var k = 0; k < state.thread.length; k++) {
+          var m = state.thread[k];
+          try {
+            var nm2 = mailFileName(m.receivedDateTime || m.sentDateTime, senderOf(m), "Mail", ref);
+            if (has(nm2.split("_").slice(0, 3).join("_") + "_")) { skipped++; continue; }
+            await G.upload(f.driveId, target.id, nm2, await G.mailMime(m.id)); done.push(nm2); existing.push(nm2);
+          } catch (e) { failed.push((m.subject || "Mail") + " (" + (e.message || e) + ")"); }
+        }
       }
       clear(msg);
       msg.className = failed.length ? "err" : "ok";
-      msg.appendChild(el("div", "", done.length ? done.length + " Datei" + (done.length === 1 ? "" : "en") + " abgelegt in " + target.name + "." : "Nichts abgelegt."));
+      msg.appendChild(el("div", "", (done.length ? done.length + " Datei" + (done.length === 1 ? "" : "en") + " abgelegt in " + rel + "." : "Nichts Neues abgelegt.") +
+        (skipped ? " " + skipped + " bereits vorhanden, übersprungen." : "")));
       if (failed.length) msg.appendChild(el("div", "", "Nicht abgelegt: " + failed.join("; ")));
       if (target.webUrl) {
         var a2 = el("a", "", "Ordner öffnen"); a2.href = target.webUrl;
@@ -376,7 +477,7 @@
     if (!G.configured() || !isSupplier) { $("rueckCard").hidden = true; return; }
     $("rueckCard").hidden = false;
     box.appendChild(el("span", "muted small", "Rücklaufliste wird gelesen …"));
-    G.ruecklauf(C.domainOf(state.mail.fromAddress), state.mail.fromAddress, r.refs.an).then(function (res) {
+    G.ruecklauf(C.domainOf(r.partnerAddress || state.mail.fromAddress), r.partnerAddress || state.mail.fromAddress, r.refs.an).then(function (res) {
       if (id !== state.loadId) return;
       clear(box);
       if (!res.lieferant.length && !res.pakete.length) { $("rueckCard").hidden = true; return; }
@@ -397,6 +498,12 @@
         });
         return t;
       }
+      var named = (own.length ? own : res.lieferant).filter(function (row) { return row["Lieferant"]; })[0];
+      if (named) {
+        state.rueckName = fileSafe(String(named["Lieferant"]).replace(/\b(GmbH|mbH|AG|KG|Co\.?|s\.?r\.?o\.?|Ltd\.?|SE|Kft\.?|&)\b/gi, "")).replace(/\s+/g, " ").trim();
+        var inp = $("ablageLief");
+        if (inp && !inp.dataset.touched && SUPPLIER_TYPES.indexOf(r.type) >= 0) { inp.value = state.rueckName; refreshLieferantOrdner(); }
+      }
       if (own.length) box.appendChild(table(own));
       else if (ans.length) box.appendChild(el("div", "muted small", ans.join(", ") + " steht nicht in deiner Rücklaufliste."));
       if (other.length) {
@@ -411,35 +518,94 @@
   }
 
   /* ---------- Teile im Artikelstamm ---------- */
-  function checkTeile(force) {
+  /* pdf.js erst bei Bedarf nachladen (gut 1 MB) */
+  var pdfLib = null;
+  function loadPdfJs() {
+    if (pdfLib) return Promise.resolve(pdfLib);
+    return new Promise(function (resolve, reject) {
+      var sc = document.createElement("script");
+      sc.src = "pdf.min.js";
+      sc.onload = function () {
+        var lib = window.pdfjsLib || window["pdfjs-dist/build/pdf"];
+        if (!lib) { reject(new Error("PDF-Leser nicht verfügbar")); return; }
+        lib.GlobalWorkerOptions.workerSrc = "pdf.worker.min.js";
+        pdfLib = lib; resolve(lib);
+      };
+      sc.onerror = function () { reject(new Error("PDF-Leser konnte nicht geladen werden")); };
+      document.head.appendChild(sc);
+    });
+  }
+  async function pdfText(bytes) {
+    var lib = await loadPdfJs();
+    var doc = await lib.getDocument({ data: bytes, isEvalSupported: false }).promise;
+    var out = [], pages = Math.min(doc.numPages, 40);
+    for (var p = 1; p <= pages; p++) {
+      var tc = await (await doc.getPage(p)).getTextContent();
+      out.push(tc.items.map(function (it) { return it.str; }).join(" "));
+    }
+    return out.join("\n");
+  }
+  /* Text aus den Anhängen: PDF, Excel, CSV/TXT – ohne Download, direkt aus Outlook */
+  async function attachmentSources(status) {
+    var list = (state.mail.attachmentItems || []).filter(function (a) { return /\.(pdf|xlsx|xlsm|csv|txt)$/i.test(a.name) && (!a.size || a.size < 15 * 1024 * 1024); }).slice(0, 8);
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      try {
+        status("Lese " + a.name + " …");
+        var bytes = await attachmentBytes(a.id), text;
+        if (/\.pdf$/i.test(a.name)) text = await pdfText(bytes);
+        else if (/\.xls[xm]$/i.test(a.name)) text = G.xlsxText(bytes);
+        else text = new TextDecoder("utf-8").decode(bytes);
+        out.push({ name: a.name, tokens: X.textTokens(a.name + "\n" + text) });
+      } catch (e) { out.push({ name: a.name, tokens: X.textTokens(a.name), error: e.message || String(e) }); }
+    }
+    return out;
+  }
+  async function checkTeile(force) {
     var box = $("teile"), id = state.loadId;
-    clear(box); box.appendChild(el("span", "muted small", "Artikelstamm wird abgeglichen …"));
-    G.teileIndex(force).then(function (map) {
+    function status(t) { if (id !== state.loadId) return; clear(box); box.appendChild(el("span", "muted small", t)); }
+    status("Artikelstamm wird geladen … (beim ersten Mal einige Sekunden)");
+    try {
+      var stammErr = null;
+      var both = await Promise.all([G.stammIndex(force).catch(function (e) { stammErr = e; return null; }), G.teileIndex(force).catch(function () { return null; })]);
+      if (!both[0] && !both[1]) throw stammErr || new Error("Exporte nicht lesbar");
+      var sources = [{ name: "Mail", tokens: X.textTokens((state.mail.subject || "") + "\n" + X.newPart(state.mail.body || "")) }]
+        .concat(await attachmentSources(status));
       if (id !== state.loadId) return;
-      var res = X.matchParts(state.mail, map);
+      var res = X.matchAll(sources, both[0], both[1]);
       clear(box);
+      var errs = sources.filter(function (s) { return s.error; });
       if (!res.hits.length) {
-        box.appendChild(el("span", "muted small", res.checked ? res.checked + " Nummern geprüft – keine im Artikelstamm bekannt (neue Teile?)." : "Keine Teilenummern in der Mail gefunden."));
-        return;
+        box.appendChild(el("span", "muted small", res.checked ? res.checked + " Nummern in Mail und Anhängen geprüft – keine im Artikelstamm gefunden." : "Keine Teilenummern in Mail und Anhängen gefunden."));
+      } else {
+        box.appendChild(el("span", "muted small", res.hits.length + " Artikel im Stamm gefunden (Mail und " + (sources.length - 1) + " Anhang/Anhänge gelesen):"));
+        res.hits.slice(0, 25).forEach(function (h) {
+          var d = el("div", "part"), rec = h.rec, hist = h.hist;
+          var top = el("div");
+          top.appendChild(el("b", "", rec ? "KID " + rec.kid : (hist.nummer + "  →  " + (hist.kid ? "KID " + hist.kid : "keine KID"))));
+          if (rec && rec.sl === "P") top.appendChild(document.createTextNode("  (mit Stückliste)"));
+          d.appendChild(top);
+          var bez = rec ? rec.bezeichnung + (rec.zusatz ? " – " + rec.zusatz : "") : hist.bezeichnung;
+          if (bez) d.appendChild(el("div", "", bez));
+          if (rec && (rec.kdnr || rec.zng)) d.appendChild(el("div", "muted", [rec.kdnr ? "Kd.-Nr. " + rec.kdnr : "", rec.zng ? "Zng. " + rec.zng + (rec.index ? " Idx " + rec.index : "") : ""].filter(Boolean).join(" · ")));
+          if (hist && hist.an) d.appendChild(el("div", "muted", "Bisher: " + hist.an + (hist.von ? " (" + hist.von + (hist.bis && hist.bis !== hist.von ? "–" + hist.bis : "") + ")" : "")));
+          if (hist && hist.rma) d.appendChild(el("div", "rma", "Reklamation: " + hist.rma));
+          d.appendChild(el("div", "muted small", "Gefunden in: " + h.quellen.join(", ")));
+          box.appendChild(d);
+        });
+        if (res.hits.length > 25) box.appendChild(el("div", "muted small", "… und " + (res.hits.length - 25) + " weitere."));
       }
-      box.appendChild(el("span", "muted small", res.hits.length + " von " + res.checked + " Nummern bekannt:"));
-      res.hits.slice(0, 15).forEach(function (h) {
-        var d = el("div", "part");
-        var top = el("div"); top.appendChild(el("b", "", h.nummer)); top.appendChild(document.createTextNode(h.kid ? "  →  KID " + h.kid : "  →  keine KID"));
-        d.appendChild(top);
-        if (h.bezeichnung) d.appendChild(el("div", "", h.bezeichnung));
-        if (h.an) d.appendChild(el("div", "muted", "Bisher: " + h.an + (h.von ? " (" + h.von + (h.bis && h.bis !== h.von ? "–" + h.bis : "") + ")" : "")));
-        if (h.rma) d.appendChild(el("div", "rma", "Reklamation: " + h.rma));
-        box.appendChild(d);
-      });
-    }).catch(function (e) {
+      errs.forEach(function (e) { box.appendChild(el("div", "muted small", e.name + " nicht lesbar: " + e.error)); });
+      if (stammErr) box.appendChild(el("div", "muted small", "Hinweis: Artikelstamm-Export nicht lesbar (" + (stammErr.message || stammErr) + "), nur Teile-Index geprüft."));
+    } catch (e) {
       if (id !== state.loadId) return;
       showError(box, "Artikelstamm nicht abrufbar: ", e);
-    });
+    }
   }
   function resetTeile() {
     var box = $("teile"); clear(box);
-    var b = el("button", "secondary wide", "Nummern aus der Mail prüfen"); b.id = "btnTeile";
+    var b = el("button", "secondary wide", "Nummern aus Mail und Anhängen prüfen"); b.id = "btnTeile";
     b.type = "button"; b.addEventListener("click", function () { checkTeile(false); });
     box.appendChild(b);
   }
@@ -517,7 +683,7 @@
 
   /* ---------- Ablauf ---------- */
   function load() {
-    state.loadId++;
+    state.loadId++; state.rueckName = ""; state.thread = [];
     $("loading").hidden = false;
     $("content").hidden = true;
     readItem().then(function (mail) {
@@ -553,6 +719,8 @@
     });
     $("btnQueue").addEventListener("click", queue);
     $("btnAblage").addEventListener("click", doAblage);
+    $("ablageZiel").addEventListener("change", refreshLieferantOrdner);
+    $("ablageLief").addEventListener("input", function () { $("ablageLief").dataset.touched = "1"; });
     $("btnForget").addEventListener("click", function () {
       Office.context.roamingSettings.remove("learned");
       Office.context.roamingSettings.saveAsync(function () { fillLearnInfo(); });

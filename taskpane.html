@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kühler-Assistent</title>
-<link rel="stylesheet" href="taskpane.css?v=202611101247">
+<link rel="stylesheet" href="taskpane.css?v=202611101338">
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-<script src="msal-browser.min.js?v=202611101247"></script>
-<script src="config.js?v=202611101247"></script>
-<script src="classifier.js?v=202611101247"></script>
-<script src="extract.js?v=202611101247"></script>
-<script src="fflate.min.js?v=202611101247"></script>
-<script src="graph.js?v=202611101247"></script>
+<script src="msal-browser.min.js?v=202611101338"></script>
+<script src="config.js?v=202611101338"></script>
+<script src="classifier.js?v=202611101338"></script>
+<script src="extract.js?v=202611101338"></script>
+<script src="fflate.min.js?v=202611101338"></script>
+<script src="graph.js?v=202611101338"></script>
 </head>
 <body>
 <header class="top">
@@ -74,16 +74,22 @@
 
     <section class="card" id="teileCard">
       <div class="label">Teile im Artikelstamm</div>
-      <div id="teile" class="list"><button id="btnTeile" class="secondary wide">Nummern aus der Mail prüfen</button></div>
+      <div id="teile" class="list"><button id="btnTeile" class="secondary wide">Nummern aus Mail und Anhängen prüfen</button></div>
     </section>
 
     <section class="card" id="ablageCard" hidden>
       <div class="label">Anhänge im Projektordner ablegen</div>
       <div id="ablageList" class="list"></div>
       <label class="check"><input type="checkbox" id="ablageEml" checked> Mail selbst als .eml mit ablegen</label>
+      <label class="check" id="ablageThreadRow" hidden><input type="checkbox" id="ablageThread"> <span id="ablageThreadText">Gesamten Mailverlauf ablegen</span></label>
       <label class="field">
         <span>Zielordner</span>
         <select id="ablageZiel"></select>
+      </label>
+      <label class="field">
+        <span>Lieferanten-Unterordner (leer = keiner)</span>
+        <input type="text" id="ablageLief" list="ablageLiefList" autocomplete="off">
+        <datalist id="ablageLiefList"></datalist>
       </label>
       <button id="btnAblage" class="primary wide">Ablegen</button>
       <div id="ablageMsg" class="ok" hidden></div>
@@ -109,6 +115,6 @@
 </main>
 
 <textarea id="clip" aria-hidden="true" tabindex="-1"></textarea>
-<script src="taskpane.js?v=202611101247"></script>
+<script src="taskpane.js?v=202611101338"></script>
 </body>
 </html>

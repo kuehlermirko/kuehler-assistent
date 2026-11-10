@@ -16,7 +16,8 @@
     },
     planner: { planId: "aju6mQoAuEOJJYeKDXp_oJgADnLD" },                 // Plan „Anfragen bearbeiten“
     ruecklauf: { path: "_Lieferantenanfragen_Mirko/Lieferantenanfragen_Mirko.xlsx" },
-    teileIndexPath: "DataExchange/Artikelstamm/teile_index.csv",          // täglicher SelectLine-Export
+    teileIndexPath: "DataExchange/Artikelstamm/teile_index.csv",          // täglicher SelectLine-Export (frühere AN, Reklamationen)
+    stammPath: "DataExchange/Artikelstamm/export.csv",                    // kompletter SelectLine-Artikelstamm (KID, Kundenartikelnr., Zeichnung)
     queuePath: "DataExchange/Claude-Auftraege/neu",                       // Weg 2: Warteschlange für Hintergrund-Läufe
 
     // Übergabe an Claude: zuerst die Desktop-App (claude://), Browser nur als Ausweichweg
@@ -116,6 +117,13 @@
         task: "Rückmeldung bzw. Absage des Lieferanten in der Rücklaufliste und Lieferantenbewertung erfassen.",
         skill: "lieferanten-nachfassen-mirko",
         skills: ["lieferanten-nachfassen-mirko", "lieferantenpool-mirko"]
+      },
+      eigene_bestellung: {
+        label: "Unsere Bestellung an Lieferant",
+        tone: "lief",
+        task: "Unsere Bestellung an den Lieferanten in die AB-Überwachung aufnehmen (AB-Frist 3 Werktage), Bestellung im Projektordner ablegen, Bestellübersicht fortschreiben.",
+        skill: "ab-nachfassen-mirko",
+        skills: ["ab-nachfassen-mirko", "zweites-gehirn-kuehler"]
       },
       lieferanten_korrespondenz: {
         label: "Lieferant zur Anfrage",

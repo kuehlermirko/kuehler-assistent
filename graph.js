@@ -167,6 +167,21 @@
         }
       }
     }
+    // Nur BE bekannt: eine Datei mit der BE-Nummer im Projektordner suchen und von dort auf den AN-Ordner schließen
+    var bes = (result.refs.be || []).slice(0, 2);
+    for (var b = 0; b < bes.length; b++) {
+      var hits = await get("/drives/" + d + "/root/search(q='" + q(bes[b]) + "')?$top=25&$select=id,name,parentReference");
+      for (var h = 0; h < (hits.value || []).length; h++) {
+        var path = decodeURIComponent(((hits.value[h].parentReference || {}).path || "").replace(/^.*?root:/, ""));
+        var m = path.match(/^(.*?\/AN\d{7}[^/]*)/);
+        if (!m) continue;
+        var it = await get("/drives/" + d + "/root:" + encPath(m[1]) + "?$select=id,name,webUrl");
+        var kids2 = await get("/drives/" + d + "/items/" + it.id + "/children?$top=60&$select=id,name,folder,webUrl");
+        var subs2 = (kids2.value || []).filter(function (k) { return k.folder; });
+        return { id: it.id, name: it.name, webUrl: it.webUrl, driveId: d,
+                 subfolders: subs2.map(function (k) { return { id: k.id, name: k.name, webUrl: k.webUrl }; }).sort(function (a, c) { return a.name.localeCompare(c.name); }) };
+      }
+    }
     return null;
   }
 
@@ -184,6 +199,49 @@
       var it = await get("/drives/" + folder.driveId + "/items/" + folder.id + ":/" + encodeURIComponent(name) + "?$select=id,name,webUrl");
       return { id: it.id, name: it.name, webUrl: it.webUrl };
     }
+  }
+
+  /* Unterpfad im Projektordner sicherstellen, z. B. „05_Angebote/Endter“; fehlende Ordner werden angelegt */
+  async function ensurePath(folder, relPath) {
+    var parts = String(relPath || "").split("/").map(function (p) { return p.trim(); }).filter(Boolean);
+    if (!parts.length) return { id: folder.id, name: folder.name, webUrl: folder.webUrl };
+    var cur = await ensureSubfolder(folder, parts[0]);
+    for (var i = 1; i < parts.length; i++) {
+      try {
+        var it = await get("/drives/" + folder.driveId + "/items/" + cur.id + ":/" + encodeURIComponent(parts[i]) + "?$select=id,name,webUrl,folder");
+        cur = { id: it.id, name: it.name, webUrl: it.webUrl };
+      } catch (e) {
+        var created = await send("POST", "/drives/" + folder.driveId + "/items/" + cur.id + "/children",
+          JSON.stringify({ name: parts[i], folder: {}, "@microsoft.graph.conflictBehavior": "fail" }), { "Content-Type": "application/json" });
+        cur = { id: created.id, name: created.name, webUrl: created.webUrl };
+      }
+    }
+    return cur;
+  }
+  /* Dateinamen und Unterordner eines Ordners (für Dubletten-Prüfung und vorhandene Lieferantenordner) */
+  async function childNames(driveId, itemId) {
+    var out = { files: [], folders: [] }, url = "/drives/" + driveId + "/items/" + itemId + "/children?$top=200&$select=name,folder";
+    while (url) {
+      var r = await get(url);
+      (r.value || []).forEach(function (x) { (x.folder ? out.folders : out.files).push(x.name); });
+      url = r["@odata.nextLink"] || null;
+    }
+    return out;
+  }
+  async function childNamesByPath(folder, relPath) {
+    try {
+      var it = await get("/drives/" + folder.driveId + "/items/" + folder.id + ":/" + encPath(relPath) + "?$select=id");
+      return await childNames(folder.driveId, it.id);
+    } catch (e) { return { files: [], folders: [] }; }
+  }
+  /* Alle Mails desselben Verlaufs (Konversation) im eigenen Postfach, älteste zuerst */
+  async function conversation(conversationId) {
+    if (!conversationId) return [];
+    var r = await get("/me/messages?$filter=" + encodeURIComponent("conversationId eq '" + String(conversationId).replace(/'/g, "''") + "'") +
+      "&$top=100&$select=id,subject,from,receivedDateTime,sentDateTime,isDraft");
+    return (r.value || []).filter(function (m) { return !m.isDraft; }).sort(function (a, b) {
+      return new Date(a.receivedDateTime || a.sentDateTime) - new Date(b.receivedDateTime || b.sentDateTime);
+    });
   }
 
   /* Datei hochladen: bis 4 MB direkt, darüber in Teilen (Upload-Sitzung) */
@@ -247,7 +305,12 @@
     var t = await token();
     var res = await fetch(GRAPH + "/drives/" + cfg.drives.projekte + "/root:/" + encPath(path) + ":/content", { headers: { Authorization: "Bearer " + t } });
     if (!res.ok) throw new Error("Datei nicht abrufbar (" + res.status + ")");
-    var files = root.fflate.unzipSync(new Uint8Array(await res.arrayBuffer()));
+    var wb = wbFromBytes(new Uint8Array(await res.arrayBuffer()));
+    wbCache[path] = { at: Date.now(), wb: wb };
+    return wb;
+  }
+  function wbFromBytes(bytes) {
+    var files = root.fflate.unzipSync(bytes);
     var shared = tags(xmlDoc(files, "xl/sharedStrings.xml"), "si").map(function (si) {
       return tags(si, "t").map(function (x) { return x.textContent; }).join("");
     });
@@ -261,9 +324,14 @@
       var rid = s.getAttribute("r:id") || s.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
       sheets[s.getAttribute("name")] = rels[rid];
     });
-    var wb = { files: files, shared: shared, sheets: sheets };
-    wbCache[path] = { at: Date.now(), wb: wb };
-    return wb;
+    return { files: files, shared: shared, sheets: sheets };
+  }
+  /* Ganze Excel als Text (alle Blätter), z. B. für Teilenummern aus Stücklisten oder Angebots-Excels */
+  function xlsxText(bytes) {
+    var wb = wbFromBytes(bytes);
+    return Object.keys(wb.sheets).map(function (n) {
+      try { return sheetRows(wb, n).map(function (r) { return r.join(" ; "); }).join("\n"); } catch (e) { return ""; }
+    }).join("\n");
   }
   function sheetRows(wb, name) {
     var doc = xmlDoc(wb.files, wb.sheets[name]);
@@ -329,6 +397,23 @@
     var db = await idb(); if (!db) return;
     try { db.transaction("cache", "readwrite").objectStore("cache").put(val, key); } catch (e) { /* ohne Zwischenspeicher weiter */ }
   }
+  /* Großen CSV-Export laden (Zwischenspeicher im Browser, 12 h) */
+  async function cachedCsv(key, path, force) {
+    var c = force ? null : await cacheGet(key);
+    if (c && Date.now() - c.at < 12 * 3600 * 1000) return c.text;
+    var t = await token();
+    var res = await fetch(GRAPH + "/drives/" + cfg.drives.dataExchange + "/root:/" + encPath(path) + ":/content", { headers: { Authorization: "Bearer " + t } });
+    if (!res.ok) throw new Error(path.split("/").pop() + " nicht abrufbar (" + res.status + ")");
+    var text = new TextDecoder("utf-8").decode(await res.arrayBuffer());
+    await cacheSet(key, { at: Date.now(), text: text });
+    return text;
+  }
+  var stammMap = null;
+  async function stammIndex(force) {
+    if (stammMap && !force) return stammMap;
+    stammMap = root.KuehlerTeile.parseStamm(await cachedCsv("stamm", cfg.stammPath, force));
+    return stammMap;
+  }
   var teileMap = null;
   async function teileIndex(force) {
     if (teileMap && !force) return teileMap;
@@ -357,7 +442,8 @@
 
   root.KuehlerGraph = {
     configured: configured, history: history, brain: brain,
-    projectFolder: projectFolder, ensureSubfolder: ensureSubfolder, upload: upload, mailMime: mailMime,
-    plannerTasks: plannerTasks, ruecklauf: ruecklauf, teileIndex: teileIndex, queueJob: queueJob
+    projectFolder: projectFolder, ensureSubfolder: ensureSubfolder, ensurePath: ensurePath, childNamesByPath: childNamesByPath,
+    conversation: conversation, upload: upload, mailMime: mailMime,
+    plannerTasks: plannerTasks, ruecklauf: ruecklauf, teileIndex: teileIndex, stammIndex: stammIndex, xlsxText: xlsxText, queueJob: queueJob
   };
 })(this);

@@ -107,6 +107,7 @@
     var refs = findRefs(text);
     var domain = domainOf(mail.fromAddress);
     var intern = domainMatches(domain, cfg.ownDomains);
+    var mail0Name = mail.fromName || mail.fromAddress || "";
     var via = null;
     if (intern) {
       var orig = originalSender(body, cfg);
@@ -125,7 +126,14 @@
     if (RX.rueckstand.test(head)) {
       type = "rueckstaende";
     } else if (intern) {
+      var extTo = (mail.to || []).filter(function (x) { return x.address && !domainMatches(domainOf(x.address), cfg.ownDomains); });
       if (RX.werkstatt.test(subject)) type = "werkstatt";
+      // Unsere Bestellung an einen Lieferanten (Kollege oder ich selbst als Absender)
+      else if (refs.be.length && extTo.length && /(purchase\s+order|bestellung)/i.test(subject)) {
+        type = "eigene_bestellung";
+        mail = { subject: subject, body: body, fromName: extTo[0].name || extTo[0].address, fromAddress: extTo[0].address, attachments: mail.attachments, to: mail.to };
+        domain = domainOf(extTo[0].address);
+      }
       else if (/\bAU\s?\d{7}(?![0-9])/i.test(head) && (RX.ab.test(head) || /(^|\n)AU\s?\d{7}/i.test((mail.attachments || []).join("\n")))) type = "kunden_ab";
       else type = "intern";
     } else if (customer) {
@@ -165,8 +173,10 @@
       skill: t.skill,
       skills: t.skills,
       customer: customer,
-      partner: (customer || (intern ? "Intern" : (mail.fromName || domain))) + (via ? " (über " + via + ")" : ""),
+      partner: type === "eigene_bestellung" ? (mail.fromName || domain) + " (Bestellung von " + mail0Name + ")" :
+        (customer || (intern ? "Intern" : (mail.fromName || domain))) + (via ? " (über " + via + ")" : ""),
       via: via,
+      partnerAddress: mail.fromAddress || "",
       refs: refs,
       vorgang: vorgang.length ? vorgang.join(" · ") : "Kein Vorgang erkannt",
       language: /[äöüß]|\b(sehr geehrte|hallo|anbei|ihrer|bitte|vielen dank|mit freundlichen)/i.test(text) ? "Deutsch" : "Englisch"
