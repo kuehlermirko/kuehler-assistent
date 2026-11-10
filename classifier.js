@@ -4,17 +4,17 @@
   "use strict";
 
   var REF_PATTERNS = {
-    an: /\bAN\s?(\d{7})\b/gi,
-    au: /\bAU\s?(\d{7})\b/gi,
-    be: /\bBE\s?(\d{7})\b/gi,
-    re: /\bRE\s?(\d{7})\b/gi,
-    po: /\bPO\s?#?\s?(\d{8,10})\b/gi,
-    eb: /\bEB\s?(\d{5,10})\b/gi,
-    po2: /purchase\s+order\s*(?:no\.?|nr\.?|number|#)?\s*:?\s*(\d{6,10})\b/gi,
-    sap: /\b(4500\d{6})\b/g,
-    gdels: /\b(6000\d{6})\b/g,
-    rfq: /\bRFQ\s*(?:No\.?|Nr\.?|#)?\s*(\d{6,10})\b/gi,
-    projekt: /\bL-(\d{4})\b/g
+    an: /\bAN\s?(\d{7})(?![0-9])/gi,
+    au: /\bAU\s?(\d{7})(?![0-9])/gi,
+    be: /\bBE\s?(\d{7})(?![0-9])/gi,
+    re: /\bRE\s?(\d{7})(?![0-9])/gi,
+    po: /\bPO\s?#?\s?(\d{8,10})(?![0-9])/gi,
+    eb: /\bEB\s?(\d{5,10})(?![0-9])/gi,
+    po2: /purchase\s+order\s*(?:no\.?|nr\.?|number|#)?\s*:?\s*(\d{6,10})(?![0-9])/gi,
+    sap: /\b(4500\d{6})(?![0-9])/g,
+    gdels: /\b(6000\d{6})(?![0-9])/g,
+    rfq: /\bRFQ\s*(?:No\.?|Nr\.?|#)?\s*(\d{6,10})(?![0-9])/gi,
+    projekt: /\bL-(\d{4})(?![0-9])/g
   };
   var REF_PREFIX = { an: "AN", au: "AU", be: "BE", re: "RE", po: "PO", po2: "PO", eb: "EB", sap: "", gdels: "", rfq: "RFQ ", projekt: "L-" };
 
@@ -126,7 +126,7 @@
       type = "rueckstaende";
     } else if (intern) {
       if (RX.werkstatt.test(subject)) type = "werkstatt";
-      else if (/\bAU\s?\d{7}\b/i.test(head) && (RX.ab.test(head) || /(^|\n)AU\s?\d{7}/i.test((mail.attachments || []).join("\n")))) type = "kunden_ab";
+      else if (/\bAU\s?\d{7}(?![0-9])/i.test(head) && (RX.ab.test(head) || /(^|\n)AU\s?\d{7}/i.test((mail.attachments || []).join("\n")))) type = "kunden_ab";
       else type = "intern";
     } else if (customer) {
       if (RX.spez.test(head)) type = "spezifikation";
@@ -145,6 +145,10 @@
       else if (RX.angebot.test(subject)) type = "lieferantenangebot";
       else if (RX.ab.test(body)) type = "lieferanten_ab";
       else if (RX.angebot.test(body) && mail.attachments && mail.attachments.length) type = "lieferantenangebot";
+      // Verlauf zu einer unserer Lieferantenanfragen (AN im Betreff) bzw. zu einer Bestellung (BE)
+      else if (refs.an.length && RX.rfq.test(subject)) type = "lieferanten_korrespondenz";
+      else if (refs.be.length) type = "lieferanten_bestellung";
+      else if (refs.an.length) type = "lieferanten_korrespondenz";
       else type = "sonstige";
     }
 

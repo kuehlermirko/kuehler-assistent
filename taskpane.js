@@ -199,7 +199,7 @@
   function defaultTarget(type, folder) {
     var want = { rfq: "01_Kundenanfrage", rfq_gdels: "01_Kundenanfrage", richtpreis: "01_Kundenanfrage", spezifikation: "01_Kundenanfrage",
       kundenbestellung: "07_Auftragsbearbeitung", kunden_ab: "07_Auftragsbearbeitung", lieferanten_ab: "07_Auftragsbearbeitung", fai: "07_Auftragsbearbeitung",
-      lieferantenangebot: "04_Anfragen", lieferant_rueckmeldung: "04_Anfragen" }[type] || "_Mail-Eingang";
+      lieferantenangebot: "04_Anfragen", lieferant_rueckmeldung: "04_Anfragen", lieferanten_korrespondenz: "04_Anfragen", lieferanten_bestellung: "07_Auftragsbearbeitung" }[type] || "_Mail-Eingang";
     return want;
   }
   function loadProjekt() {

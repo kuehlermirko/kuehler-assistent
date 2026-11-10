@@ -226,9 +226,66 @@
   }
 
   /* ---------- Rücklaufliste Lieferantenanfragen ---------- */
+  /* Die Excel wird als Datei geladen und im Browser gelesen (nur lesend, ohne Excel-Online-Sitzung).
+     Hintergrund: Die Workbook-Schnittstelle von Graph scheitert in manchen Bibliotheken mit
+     „Could not obtain a WAC access token“. Zwischenspeicher: 5 Minuten. */
+  var wbCache = {};
+  function xmlDoc(files, name) {
+    var f = files[name];
+    return f ? new DOMParser().parseFromString(new TextDecoder("utf-8").decode(f), "application/xml") : null;
+  }
+  function tags(node, name) { return node ? Array.prototype.slice.call(node.getElementsByTagNameNS("*", name)) : []; }
+  function colIndex(ref) {
+    var m = String(ref || "").match(/^([A-Z]+)/), n = 0;
+    if (!m) return -1;
+    for (var i = 0; i < m[1].length; i++) n = n * 26 + (m[1].charCodeAt(i) - 64);
+    return n - 1;
+  }
+  async function workbook(path) {
+    var c = wbCache[path];
+    if (c && Date.now() - c.at < 5 * 60 * 1000) return c.wb;
+    var t = await token();
+    var res = await fetch(GRAPH + "/drives/" + cfg.drives.projekte + "/root:/" + encPath(path) + ":/content", { headers: { Authorization: "Bearer " + t } });
+    if (!res.ok) throw new Error("Datei nicht abrufbar (" + res.status + ")");
+    var files = root.fflate.unzipSync(new Uint8Array(await res.arrayBuffer()));
+    var shared = tags(xmlDoc(files, "xl/sharedStrings.xml"), "si").map(function (si) {
+      return tags(si, "t").map(function (x) { return x.textContent; }).join("");
+    });
+    var rels = {};
+    tags(xmlDoc(files, "xl/_rels/workbook.xml.rels"), "Relationship").forEach(function (r) {
+      var target = r.getAttribute("Target").replace(/^\//, "");
+      rels[r.getAttribute("Id")] = target.indexOf("xl/") === 0 ? target : "xl/" + target;
+    });
+    var sheets = {};
+    tags(xmlDoc(files, "xl/workbook.xml"), "sheet").forEach(function (s) {
+      var rid = s.getAttribute("r:id") || s.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+      sheets[s.getAttribute("name")] = rels[rid];
+    });
+    var wb = { files: files, shared: shared, sheets: sheets };
+    wbCache[path] = { at: Date.now(), wb: wb };
+    return wb;
+  }
+  function sheetRows(wb, name) {
+    var doc = xmlDoc(wb.files, wb.sheets[name]);
+    if (!doc) throw new Error("Blatt „" + name + "“ nicht gefunden");
+    return tags(doc, "row").map(function (row) {
+      var out = [];
+      tags(row, "c").forEach(function (cell) {
+        var i = colIndex(cell.getAttribute("r")); if (i < 0) i = out.length;
+        var type = cell.getAttribute("t"), v = tags(cell, "v")[0], val = "";
+        if (type === "s") val = v ? wb.shared[parseInt(v.textContent, 10)] || "" : "";
+        else if (type === "inlineStr") val = tags(cell, "t").map(function (x) { return x.textContent; }).join("");
+        else if (type === "str" || type === "e") val = v ? v.textContent : "";
+        else if (type === "b") val = v ? v.textContent === "1" : "";
+        else if (v) { var n = Number(v.textContent); val = isNaN(n) ? v.textContent : n; }
+        while (out.length < i) out.push("");
+        out[i] = val;
+      });
+      return out;
+    });
+  }
   async function sheet(path, name) {
-    var r = await get("/drives/" + cfg.drives.projekte + "/root:/" + encPath(path) + ":/workbook/worksheets('" + q(name) + "')/usedRange(valuesOnly=true)?$select=values");
-    var rows = r.values || [];
+    var rows = sheetRows(await workbook(path), name);
     var head = (rows[0] || []).map(function (h) { return String(h).trim(); });
     return rows.slice(1).filter(function (row) { return row.some(function (v) { return v !== "" && v != null; }); }).map(function (row) {
       var o = {}; head.forEach(function (h, i) { o[h] = row[i]; }); return o;

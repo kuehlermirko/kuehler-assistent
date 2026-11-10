@@ -97,6 +97,8 @@
     rx = /\b(heute|today|morgen|tomorrow|asap|umgehend|sofort|urgent|dringend)\b/gi;
     while ((m = rx.exec(text)) !== null) {
       if (/(guten|good)\s*$/i.test(text.slice(Math.max(0, m.index - 8), m.index))) continue; // „Guten Morgen“
+      // Haftungsausschlüsse in Signaturen („… benachrichtigen Sie uns sofort …“) sind keine Frist
+      if (/(irrt(ü|ue)mlich|in\s+error|benachrichtigen|notify|vertraulich|confidential)/i.test(text.slice(Math.max(0, m.index - 160), m.index + 80))) continue;
       var w = m[1].toLowerCase(), base = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 15, 0, 0);
       if (w === "morgen" || w === "tomorrow") base.setDate(base.getDate() + 1);
       add(base, m.index, m[0].length, m[0]);

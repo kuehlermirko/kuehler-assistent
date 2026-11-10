@@ -26,7 +26,7 @@
     claudePrefill: true,
 
     // Eigene Domains (Mails von hier gelten als intern)
-    ownDomains: ["kuehler-gmbh.de", "kuehlerds.de"],
+    ownDomains: ["kuehler-gmbh.de", "kuehlerds.de", "kuehlerturkei.com.tr"],
 
     // Kunden: Erkennung über Absender-Domain oder Namen im Absender/Betreff.
     // Domains bitte bei Bedarf ergänzen bzw. prüfen.
@@ -116,6 +116,20 @@
         task: "Rückmeldung bzw. Absage des Lieferanten in der Rücklaufliste und Lieferantenbewertung erfassen.",
         skill: "lieferanten-nachfassen-mirko",
         skills: ["lieferanten-nachfassen-mirko", "lieferantenpool-mirko"]
+      },
+      lieferanten_korrespondenz: {
+        label: "Lieferant zur Anfrage",
+        tone: "lief",
+        task: "Mail des Lieferanten zu unserer Anfrage einordnen: Angebot, Rückfrage oder Absage erkennen, in Kalkulation und Rücklaufliste erfassen, offene Fragen beantworten.",
+        skill: "lieferantenangebote-einlesen",
+        skills: ["lieferantenangebote-einlesen", "lieferanten-nachfassen-mirko", "zweites-gehirn-kuehler"]
+      },
+      lieferanten_bestellung: {
+        label: "Lieferant zur Bestellung (BE)",
+        tone: "lief",
+        task: "Mail des Lieferanten zu unserer Bestellung einordnen: Versand, Liefertermin oder AB mit der Bestellung abgleichen, Abweichungen melden, Lieferstatus fortschreiben.",
+        skill: "ab-nachfassen-mirko",
+        skills: ["ab-nachfassen-mirko", "lieferanten-rueckstaende", "zweites-gehirn-kuehler"]
       },
       werkstatt: {
         label: "Werkstatt / Montage",
