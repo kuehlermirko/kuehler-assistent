@@ -29,7 +29,7 @@
     richtpreis: /(richtpreis|budgetpreis|budget(ary)?\s+(price|quot)|indicative\s+price|grobkalkulation|hausnummer)/i,
     rueckstand: /(ergebnismenge|r(ü|ue)ckstandsliste|r(ü|ue)ckst(ä|ae)nde\b|backlog)/i,
     werkstatt: /(werkstattauftrag|werkstatt|montage)/i,
-    absage: /(\babsage\b|kein(en)?\s+angebot|leider\s+nicht\s+anbieten|nicht\s+anbieten\s+k(ö|oe)nnen|unable\s+to\s+(quote|offer)|decline\s+to\s+quote|no\s+quot(e|ation))/i
+    absage: /(\babsage\b|kein(en)?\s+angebot|von\s+einer\s+angebots(erstellung|abgabe)\s+absehen|nicht\s+wettbewerbsf(ä|ae)hig\s+anbieten|m(ü|ue)ssen\s+(leider\s+)?absagen|not\s+(be\s+)?able\s+to\s+(quote|offer)|not\s+competitive|cannot\s+quote|regret(fully)?\s+(to\s+)?decline|leider\s+nicht\s+anbieten|nicht\s+anbieten\s+k(ö|oe)nnen|unable\s+to\s+(quote|offer)|decline\s+to\s+quote|no\s+quot(e|ation))/i
   };
 
   function uniq(arr) {
@@ -140,7 +140,7 @@
       if (type === "rfq" && customer === "GDELS-Mowag") type = "rfq_gdels";
     } else {
       if (RX.rechnung.test(subject)) type = "rechnung";
-      else if (RX.absage.test(text)) type = "lieferant_rueckmeldung";
+      else if (RX.absage.test(subject + "\n" + body.split(/\n\s*(Von|From|Gesendet|Sent):\s/)[0])) type = "lieferant_rueckmeldung";
       else if (RX.ab.test(subject)) type = "lieferanten_ab";
       else if (RX.angebot.test(subject)) type = "lieferantenangebot";
       else if (RX.ab.test(body)) type = "lieferanten_ab";

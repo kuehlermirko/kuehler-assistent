@@ -380,10 +380,14 @@
       if (id !== state.loadId) return;
       clear(box);
       if (!res.lieferant.length && !res.pakete.length) { $("rueckCard").hidden = true; return; }
-      if (res.lieferant.length) {
+      // Zeilen zur AN der Mail zuerst; Anfragen zu anderen AN getrennt darunter
+      var ans = r.refs.an || [];
+      var own = ans.length ? res.lieferant.filter(function (row) { return ans.indexOf(String(row["AN-Nr."]).trim()) >= 0; }) : res.lieferant;
+      var other = ans.length ? res.lieferant.filter(function (row) { return ans.indexOf(String(row["AN-Nr."]).trim()) < 0; }) : [];
+      function table(rows) {
         var t = el("table", "mini");
         var h = el("tr"); ["AN / Gewerk", "Frist", "Status", "Eingang"].forEach(function (x) { h.appendChild(el("th", "", x)); }); t.appendChild(h);
-        res.lieferant.forEach(function (row) {
+        rows.forEach(function (row) {
           var tr = el("tr");
           tr.appendChild(el("td", "", row["AN-Nr."] + " · " + row["Gewerk"]));
           tr.appendChild(el("td", "", excelDate(row["Angebotsfrist"])));
@@ -391,7 +395,13 @@
           tr.appendChild(el("td", "", excelDate(row["Eingang am"])));
           t.appendChild(tr);
         });
-        box.appendChild(t);
+        return t;
+      }
+      if (own.length) box.appendChild(table(own));
+      else if (ans.length) box.appendChild(el("div", "muted small", ans.join(", ") + " steht nicht in deiner Rücklaufliste."));
+      if (other.length) {
+        box.appendChild(el("div", "small sub", "Weitere Anfragen bei diesem Lieferanten:"));
+        box.appendChild(table(other));
       }
       res.pakete.forEach(function (p) {
         box.appendChild(el("div", "small", "Paket " + p["AN-Nr."] + "_" + p["Gewerk"] + ": " + p["angefragt"] + " angefragt · " + p["Angebot"] + " Angebote · " +

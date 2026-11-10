@@ -90,3 +90,4 @@ table.mini td { border-bottom: 1px solid var(--line); padding: 4px 6px; vertical
 .part { padding: 6px 8px; border-radius: 6px; background: var(--light); font-size: 12px; line-height: 1.4; }
 .part b { font-size: 13px; }
 .part .rma { color: #B23A2E; font-weight: bold; }
+.sub { margin: 10px 0 4px; color: #5a6b80; }
