@@ -66,3 +66,27 @@ textarea { resize: vertical; }
 .hist a:hover { color: var(--accent); text-decoration: underline; }
 .foot { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
 #clip { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; }
+
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.check input { width: auto; }
+.proj { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 6px; background: var(--light); }
+.proj a { color: var(--accent); font-weight: bold; text-decoration: none; word-break: break-word; }
+.proj a:hover { text-decoration: underline; }
+.task-row { display: flex; gap: 8px; font-size: 12px; }
+.task-row .d { width: 70px; flex-shrink: 0; color: var(--muted); }
+.task-row .late { color: #B23A2E; font-weight: bold; }
+.frist { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--light); }
+.frist:last-child { border-bottom: none; }
+.frist .when { min-width: 82px; font-weight: bold; }
+.frist .when.weak { font-weight: normal; color: var(--muted); }
+.frist .ctx { flex: 1; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.frist button { padding: 4px 8px; height: auto; font-size: 12px; }
+table.mini { border-collapse: collapse; width: 100%; font-size: 12px; }
+table.mini th { background: var(--dark); color: #FFFFFF; text-align: left; padding: 4px 6px; font-weight: bold; }
+table.mini td { border-bottom: 1px solid var(--line); padding: 4px 6px; vertical-align: top; }
+.st-ok { color: var(--oktext); font-weight: bold; }
+.st-no { color: #B23A2E; font-weight: bold; }
+.st-open { color: var(--warntext); font-weight: bold; }
+.part { padding: 6px 8px; border-radius: 6px; background: var(--light); font-size: 12px; line-height: 1.4; }
+.part b { font-size: 13px; }
+.part .rma { color: #B23A2E; font-weight: bold; }

@@ -9,6 +9,7 @@
 <script src="msal-browser.min.js"></script>
 <script src="config.js"></script>
 <script src="classifier.js"></script>
+<script src="extract.js"></script>
 <script src="graph.js"></script>
 </head>
 <body>
@@ -32,6 +33,11 @@
       <span>Name des Vaults in Obsidian</span>
       <input id="setVaultName" placeholder="Kühler">
     </label>
+    <div class="field">
+      <span>Gelernte Skill-Zuordnungen</span>
+      <small id="learnInfo" class="muted"></small>
+      <button id="btnForget" class="secondary">Gelerntes zurücksetzen</button>
+    </div>
     <div class="row">
       <button id="btnSaveSettings" class="primary">Speichern</button>
       <span id="settingsMsg" class="muted"></span>
@@ -46,11 +52,40 @@
       <div class="row wrap"><span id="typeBadge" class="badge"></span></div>
       <div id="vorgang" class="vorgang"></div>
       <div id="partner" class="muted small"></div>
+      <div id="projekt" class="list"></div>
+    </section>
+
+    <section class="card" id="fristCard" hidden>
+      <div class="label">Fristen und Termine in der Mail</div>
+      <div id="fristen" class="list"></div>
+      <div id="fristMsg" class="ok" hidden></div>
     </section>
 
     <section class="card" id="brainCard">
       <div class="label">Aus dem Kühler-Gehirn</div>
       <div id="brain" class="list"><span class="muted small">Wird geladen …</span></div>
+    </section>
+
+    <section class="card" id="rueckCard" hidden>
+      <div class="label">Lieferanten-Rücklauf</div>
+      <div id="rueck" class="list"></div>
+    </section>
+
+    <section class="card" id="teileCard">
+      <div class="label">Teile im Artikelstamm</div>
+      <div id="teile" class="list"><button id="btnTeile" class="secondary wide">Nummern aus der Mail prüfen</button></div>
+    </section>
+
+    <section class="card" id="ablageCard" hidden>
+      <div class="label">Anhänge im Projektordner ablegen</div>
+      <div id="ablageList" class="list"></div>
+      <label class="check"><input type="checkbox" id="ablageEml" checked> Mail selbst als .eml mit ablegen</label>
+      <label class="field">
+        <span>Zielordner</span>
+        <select id="ablageZiel"></select>
+      </label>
+      <button id="btnAblage" class="primary wide">Ablegen</button>
+      <div id="ablageMsg" class="ok" hidden></div>
     </section>
 
     <section class="card accent">
@@ -61,13 +96,15 @@
         <span>Anderer Skill (falls die Erkennung nicht passt)</span>
         <select id="skillSelect"></select>
       </label>
+      <div id="learnNote" class="muted small" hidden></div>
       <button id="btnHandoff" class="primary wide">An Claude übergeben</button>
+      <button id="btnQueue" class="secondary wide">Im Hintergrund erledigen lassen</button>
       <div id="handoffMsg" class="ok" hidden></div>
       <small class="muted">Für Abläufe mit SelectLine, Projektordnern, Kalkulation und Lieferantenanfragen. Antworten und Zusammenfassungen direkt über Claude for Outlook.</small>
     </section>
   </div>
 
-  <p class="foot">Der Assistent liest nur – er sendet, löscht und verschiebt nichts.</p>
+  <p class="foot">Der Assistent sendet, löscht und verschiebt keine Mails. Er legt nur auf Klick Dateien im Projektordner ab.</p>
 </main>
 
 <textarea id="clip" aria-hidden="true" tabindex="-1"></textarea>

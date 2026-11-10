@@ -5,8 +5,19 @@
     // Anwendungs-ID aus der Entra-App-Registrierung (setup.mjs trägt sie ein)
     clientId: "f344e357-496c-4240-a81f-65018e75b8e5",
 
-    // Microsoft-Graph-Berechtigungen (nur lesend)
-    graphScopes: ["User.Read", "Mail.Read", "Files.Read"],
+    // Microsoft-Graph-Berechtigungen
+    // Files.ReadWrite.All: Projektordner, Ablage, Rücklaufliste, Artikelstamm-Export, Warteschlange · Tasks.Read: Planner
+    graphScopes: ["User.Read", "Mail.Read", "Files.ReadWrite.All", "Tasks.Read"],
+
+    // SharePoint-Bibliotheken (Drive-IDs)
+    drives: {
+      projekte: "b!Jgm_Zm6fdkWWpo3KQzwE40N10fnD_IZNvjOy1I2JuQy4rcft9XpAQ5egpX_LN8wm",      // Projekte Thüringen
+      dataExchange: "b!x2vLEJ9uXEeT45PnXoZfKE_pN3F6u2JHt2SEIkn2SaJXx-CwR9HTTYC9p-Hd0Yzb"  // Kuehler Data Exchange
+    },
+    planner: { planId: "aju6mQoAuEOJJYeKDXp_oJgADnLD" },                 // Plan „Anfragen bearbeiten“
+    ruecklauf: { path: "_Lieferantenanfragen_Mirko/Lieferantenanfragen_Mirko.xlsx" },
+    teileIndexPath: "DataExchange/Artikelstamm/teile_index.csv",          // täglicher SelectLine-Export
+    queuePath: "DataExchange/Claude-Auftraege/neu",                       // Weg 2: Warteschlange für Hintergrund-Läufe
 
     // Übergabe an Claude: zuerst die Desktop-App (claude://), Browser nur als Ausweichweg
     claudeDesktopUrl: "claude://claude.ai/new",
