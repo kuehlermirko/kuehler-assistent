@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Freigabe">
+<meta name="theme-color" content="#14365f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Kühler Freigabe</title>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<style>
+:root{--brand:#14365f;--brand2:#1d4f8f;--bg:#f2f4f7;--card:#fff;--line:#dde2e9;--txt:#141a22;--mut:#5b6573;--ok:#16794a;--okbg:#e6f4ec;--warn:#9a4b00;--warnbg:#fdf0e1;--err:#b42318;--errbg:#fde8e7}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141b;--card:#18202a;--line:#2a3442;--txt:#e8edf3;--mut:#9aa6b5;--okbg:#123524;--warnbg:#3a2a12;--errbg:#3d1714}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer}
+.kopf{background:var(--brand);color:#fff;padding:calc(env(safe-area-inset-top) + 18px) 18px 16px}
+.kopf small{color:#c9d6e8;font-size:13px}
+.kopf h1{margin:2px 0 12px;font-size:28px}
+.kpis{display:flex;gap:10px}
+.kpi{flex:1;background:rgba(255,255,255,.12);border-radius:12px;padding:10px 12px}
+.kpi span{display:block;font-size:12px;color:#c9d6e8}.kpi b{font-size:20px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;padding:14px 16px 4px}
+.chip{min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:13px;font-weight:600}
+.chip.an{background:var(--brand);border-color:var(--brand);color:#fff}
+.liste{padding:8px 16px 120px;display:flex;flex-direction:column;gap:10px}
+.karte{width:100%;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.reihe{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.meta{font-size:12px;color:var(--mut);font-weight:500}
+.name{font-size:15px;font-weight:600}
+.betrag{font-size:15px;font-weight:700;white-space:nowrap}
+.tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tag{font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;background:#e8eef7;color:var(--brand2)}
+.b-ok{background:var(--okbg);color:var(--ok)}.b-warn{background:var(--warnbg);color:var(--warn)}.b-err{background:var(--errbg);color:var(--err)}.b-grey{background:var(--line);color:var(--mut)}
+.rechts{margin-left:auto}
+.fuss{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom) + 14px);background:linear-gradient(rgba(0,0,0,0),var(--bg) 35%)}
+.knopf{width:100%;min-height:52px;border-radius:14px;border:none;font-size:16px;font-weight:600;background:var(--ok);color:#fff}
+.knopf.aus{background:var(--line);color:var(--mut)}
+.knopf.rot{background:var(--err)}
+.knopf.rand{background:var(--card);color:var(--err);border:1.5px solid var(--err)}
+.leer{text-align:center;color:var(--mut);padding:40px 0;font-size:14px}
+.zurueck{background:none;border:none;color:#fff;font-size:15px;padding:6px 0;min-height:44px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 16px 0}
+.raster{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.feld span{display:block;font-size:11px;color:var(--mut)}.feld b{font-size:14px}
+.pos{border-top:1px solid var(--line);padding:10px 0;display:flex;flex-direction:column;gap:3px;font-size:13px}
+.pos:first-of-type{border-top:none}
+.hinweis{font-size:12px;color:var(--mut);padding:8px 16px}
+.toast{position:fixed;left:16px;right:16px;top:calc(env(safe-area-inset-top) + 12px);background:#141a22;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;z-index:9}
+textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;font-size:15px;background:var(--card);color:var(--txt)}
+.anmelden{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;padding:24px;text-align:center}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ================= Einstellungen (keine Geheimnisse) ================= */
+const KONFIG = {
+  tenantId: 'a3e5a70a-cc2c-48b1-8d93-46e90c54e178',
+  clientId: 'de0630a0-da76-4ca1-a4bd-e25de5dae0ec',
+  siteUrl:  'https://kuehler.sharepoint.com/sites/Belegfreigabe',
+  liste:    'Belegfreigabe'
+};
+const SCOPES = ['Sites.ReadWrite.All'];
+
+/* ================= Anmeldung ================= */
+const MS = new msal.PublicClientApplication({
+  auth: { clientId: KONFIG.clientId, authority: 'https://login.microsoftonline.com/' + KONFIG.tenantId, redirectUri: location.origin + location.pathname },
+  cache: { cacheLocation: 'localStorage' }
+});
+let konto = null;
+async function token() {
+  try { return (await MS.acquireTokenSilent({ scopes: SCOPES, account: konto })).accessToken; }
+  catch (e) { await MS.acquireTokenRedirect({ scopes: SCOPES, account: konto }); }
+}
+async function graph(methode, pfad, inhalt) {
+  const r = await fetch('https://graph.microsoft.com/v1.0' + pfad, {
+    method: methode,
+    headers: { Authorization: 'Bearer ' + await token(), 'Content-Type': 'application/json' },
+    body: inhalt ? JSON.stringify(inhalt) : undefined
+  });
+  if (!r.ok) throw new Error('Graph ' + r.status + ': ' + (await r.text()).slice(0, 200));
+  return r.status === 204 ? null : r.json();
+}
+
+/* ================= Zustand ================= */
+const S = { ansicht: 'liste', filter: 'offen', eintraege: [], sel: null, grund: '', laden: true, fehler: '', toast: '', listenPfad: null };
+const eur = v => (Number(v) || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const datum = v => v ? new Date(v).toLocaleDateString('de-DE') : '–';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function ladeListe() {
+  try {
+    if (!S.listenPfad) {
+      const u = new URL(KONFIG.siteUrl);
+      const site = await graph('GET', '/sites/' + u.host + ':' + u.pathname.replace(/\/$/, ''));
+      S.listenPfad = '/sites/' + site.id + '/lists/' + encodeURIComponent(KONFIG.liste);
+    }
+    let alle = [], next = S.listenPfad + '/items?expand=fields&$top=500';
+    while (next) {
+      const r = await graph('GET', next.replace('https://graph.microsoft.com/v1.0', ''));
+      alle = alle.concat(r.value); next = r['@odata.nextLink'];
+    }
+    S.eintraege = alle.map(e => ({ id: e.id, ...e.fields, pos: (() => { try { return JSON.parse(e.fields.PositionenJson || '[]'); } catch { return []; } })() }));
+    S.fehler = '';
+  } catch (e) { S.fehler = e.message; }
+  S.laden = false; zeichne();
+}
+
+function badge(e) {
+  if (e.Status === 'Freigegeben') return ['Freigegeben', 'b-ok'];
+  if (e.Status === 'Erledigt') return ['Außerhalb erledigt', 'b-grey'];
+  if (e.Status === 'Fehler') return ['Achtung', 'b-err'];
+  if (e.Entscheidung) return ['Wird verarbeitet …', 'b-grey'];
+  if (e.KalkAbw == null) return ['ohne Kalkpreis', 'b-grey'];
+  if (e.KalkAbw > 2) return ['+' + e.KalkAbw.toLocaleString('de-DE') + ' % über Kalk', 'b-warn'];
+  return ['im Rahmen der Kalk', 'b-ok'];
+}
+const istLeer = e => !e.Lieferant || !(Number(e.Netto) > 0);
+function sichtbar() {
+  return S.eintraege.filter(e => {
+    if (S.filter === 'offen') return e.Status === 'Offen' && !istLeer(e);
+    if (S.filter === 'kalk') return e.Status === 'Offen' && e.KalkAbw > 2;
+    if (S.filter === 'leer') return e.Status === 'Offen' && istLeer(e);
+    return e.Status !== 'Offen';
+  }).sort((a, b) => String(b.Title).localeCompare(String(a.Title)));
+}
+
+/* ================= Aktionen ================= */
+async function entscheide(e, was, grund) {
+  try {
+    await graph('PATCH', S.listenPfad + '/items/' + e.id + '/fields', { Entscheidung: was, Begruendung: grund || '' });
+    e.Entscheidung = was; S.ansicht = 'liste';
+    zeige(e.Title + (was === 'Freigeben' ? ' zur Freigabe übergeben' : ' zur Ablehnung übergeben'));
+    setTimeout(ladeListe, 4000);
+  } catch (err) { zeige('Fehler: ' + err.message); }
+}
+async function sammel() {
+  const ziel = S.eintraege.filter(e => e.Status === 'Offen' && !e.Entscheidung && !istLeer(e) && e.KalkAbw != null && e.KalkAbw <= 2);
+  if (!ziel.length || !confirm(ziel.length + ' Bestellungen im Rahmen der Kalk freigeben?')) return;
+  for (const e of ziel) { await graph('PATCH', S.listenPfad + '/items/' + e.id + '/fields', { Entscheidung: 'Freigeben' }); e.Entscheidung = 'Freigeben'; }
+  zeige(ziel.length + ' Bestellungen übergeben'); zeichne(); setTimeout(ladeListe, 4000);
+}
+function zeige(t) { S.toast = t; zeichne(); clearTimeout(zeige.t); zeige.t = setTimeout(() => { S.toast = ''; zeichne(); }, 2600); }
+
+/* ================= Darstellung ================= */
+function zeichne() {
+  const app = document.getElementById('app');
+  if (!konto) { app.innerHTML = `<div class="anmelden"><h1 style="margin:0">Kühler Freigabe</h1><p style="color:var(--mut);margin:0">Anmeldung mit Ihrem Kühler-Konto</p><button class="knopf" style="max-width:320px" id="login">Anmelden</button></div>`;
+    document.getElementById('login').onclick = () => MS.loginRedirect({ scopes: SCOPES }); return; }
+  const offen = S.eintraege.filter(e => e.Status === 'Offen' && !istLeer(e));
+  let h = '';
+  if (S.ansicht === 'liste') {
+    const sb = S.eintraege.filter(e => e.Status === 'Offen' && !e.Entscheidung && !istLeer(e) && e.KalkAbw != null && e.KalkAbw <= 2).length;
+    h += `<div class="kopf"><small>Kühler GmbH &amp; Co. KG · ${esc(konto.name || '')}</small><h1>Freigaben</h1>
+      <div class="kpis"><div class="kpi"><span>Offen</span><b>${offen.length}</b></div><div class="kpi" style="flex:2"><span>Offenes Volumen netto</span><b>${eur(offen.reduce((a, e) => a + (Number(e.Netto) || 0), 0))}</b></div></div></div>
+      <div class="chips">${[['offen', 'Offen'], ['kalk', 'Über Kalk'], ['leer', 'Leer / 0 €'], ['erledigt', 'Erledigt']].map(([k, l]) => `<button class="chip ${S.filter === k ? 'an' : ''}" data-f="${k}">${l}</button>`).join('')}</div>`;
+    if (S.fehler) h += `<div class="hinweis" style="color:var(--err)">${esc(S.fehler)}</div>`;
+    const liste = sichtbar();
+    h += '<div class="liste">' + (S.laden ? '<div class="leer">Lade …</div>' : liste.length ? liste.map(e => {
+      const [bt, bc] = badge(e);
+      return `<button class="karte" data-id="${e.id}"><div class="reihe" style="width:100%"><div><div class="meta">${esc(e.Title)} · ${datum(e.Belegdatum)}</div><div class="name">${esc(e.Lieferant || '(ohne Lieferant)')}</div></div><div class="betrag">${eur(e.Netto)}</div></div>
+        <div class="tags">${e.Kommission ? `<span class="tag">${esc(e.Kommission)}</span>` : ''}<span class="meta">${esc(e.Ersteller)}</span><span class="tag ${bc} rechts">${bt}</span></div></button>`;
+    }).join('') : '<div class="leer">Nichts in dieser Ansicht.</div>') + '</div>';
+    h += `<div class="fuss"><button class="knopf ${sb ? '' : 'aus'}" id="sammel">${sb ? 'Alle im Rahmen freigeben (' + sb + ')' : 'Nichts im Rahmen offen'}</button></div>`;
+  } else {
+    const e = S.eintraege.find(x => x.id === S.sel); if (!e) { S.ansicht = 'liste'; return zeichne(); }
+    const [bt, bc] = badge(e);
+    h += `<div class="kopf"><button class="zurueck" id="zurueck">‹ Freigaben</button><div><small>${esc(e.Title)} · Bestellung · ${datum(e.Belegdatum)}</small></div>
+      <h1 style="font-size:22px;margin:4px 0">${esc(e.Lieferant)}</h1><div style="font-size:30px;font-weight:700">${eur(e.Netto)} <small>netto</small></div></div>`;
+    if (S.ansicht === 'ablehnen') {
+      h += `<div class="box"><b>Begründung an ${esc(e.Ersteller)}</b><div class="chips" style="padding:10px 0">${['Preis über Kalkulation', 'Anderen Lieferanten prüfen', 'Termin passt nicht', 'Menge prüfen'].map(g => `<button class="chip ${S.grund === g ? 'an' : ''}" data-g="${esc(g)}">${g}</button>`).join('')}</div>
+        <label for="grund" class="meta">Text</label><textarea id="grund" rows="4">${esc(S.grund)}</textarea></div>
+        <div class="box" style="border:none;background:none;padding:0 0 30px;display:flex;gap:10px"><button class="knopf rand" id="abbr" style="flex:1">Abbrechen</button><button class="knopf rot" id="ablehnenOk" style="flex:2">Beleg ablehnen</button></div>`;
+    } else {
+      h += `<div class="box raster"><div class="feld"><span>Kommission</span><b>${esc(e.Kommission || '–')}</b></div><div class="feld"><span>Erstellt von</span><b>${esc(e.Ersteller || '–')}</b></div>
+        <div class="feld"><span>Liefertermin</span><b>${datum(e.Liefertermin)}</b></div><div class="feld"><span>Ansprechpartner</span><b>${esc(e.Ansprechpartner || '–')}</b></div></div>
+        <div class="box"><div class="reihe"><b>Abgleich mit Kalkpreis</b><span class="tag ${bc}">${bt}</span></div>
+        <div class="meta" style="margin-top:6px">${e.KalkAbw == null ? 'Für keine Position ist ein Kalkulationspreis hinterlegt.' : 'Abweichung gesamt ' + e.KalkAbw.toLocaleString('de-DE') + ' % · bezogen auf ' + (e.KalkAnteil || 0) + ' % des Bestellwerts'}</div></div>
+        <div class="box"><b>Positionen (${e.pos.length})</b>${e.pos.map(p => `<div class="pos"><div class="reihe"><span><b>${esc(p.pos)}</b> · ${esc(p.art)}</span><b>${eur(p.gp)}</b></div><div>${esc(p.bez)}</div>
+          <div class="meta">${p.menge} ${esc(p.me)} × ${eur(p.ep)}${p.rab ? ' − ' + p.rab + ' %' : ''}${p.kalk ? ' · Kalk ' + eur(p.kalk) + (p.abw != null ? ' (' + (p.abw > 0 ? '+' : '') + p.abw + ' %)' : '') : ''}</div></div>`).join('')}</div>
+        ${e.Meldung ? `<div class="box"><span class="tag ${e.Status === 'Fehler' ? 'b-err' : 'b-grey'}">${esc(e.Meldung)}</span></div>` : ''}
+        <div style="height:110px"></div>`;
+      if (e.Status === 'Offen' && !e.Entscheidung) h += `<div class="fuss" style="background:var(--card);border-top:1px solid var(--line)"><button class="knopf" id="freigeben">Freigeben</button></div>`;
+    }
+  }
+  if (S.toast) h += `<div class="toast">${esc(S.toast)}</div>`;
+  app.innerHTML = h;
+
+  app.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { S.filter = b.dataset.f; zeichne(); });
+  app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { S.sel = b.dataset.id; S.ansicht = 'detail'; scrollTo(0, 0); zeichne(); });
+  app.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.grund = b.dataset.g; zeichne(); });
+  const on = (id, f) => { const el = document.getElementById(id); if (el) el.onclick = f; };
+  on('sammel', sammel);
+  on('zurueck', () => { S.ansicht = 'liste'; zeichne(); });
+  const sel = () => S.eintraege.find(x => x.id === S.sel);
+  on('freigeben', () => { const e = sel(); if (confirm(e.Title + ' über ' + eur(e.Netto) + ' freigeben?')) entscheide(e, 'Freigeben'); });
+  on('ablehnen', () => { S.grund = ''; S.ansicht = 'ablehnen'; zeichne(); });
+  on('abbr', () => { S.ansicht = 'detail'; zeichne(); });
+  on('ablehnenOk', () => { const t = document.getElementById('grund').value.trim(); if (!t) return zeige('Bitte eine Begründung angeben'); entscheide(sel(), 'Ablehnen', t); });
+  const ta = document.getElementById('grund'); if (ta) ta.oninput = () => { S.grund = ta.value; };
+}
+
+/* ================= Start ================= */
+(async () => {
+  try {
+    const r = await MS.handleRedirectPromise();
+    konto = (r && r.account) || MS.getAllAccounts()[0] || null;
+  } catch (e) { S.fehler = e.message; }
+  zeichne();
+  if (konto) { await ladeListe(); setInterval(() => { if (S.ansicht === 'liste') ladeListe(); }, 60000); }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && konto) ladeListe(); });
+})();
+</script>
+</body>
+</html>
