@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>Kühler Freigabe</title>
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<script src="msal-browser.min.js"></script>
 <style>
 :root{--brand:#14365f;--brand2:#1d4f8f;--bg:#f2f4f7;--card:#fff;--line:#dde2e9;--txt:#141a22;--mut:#5b6573;--ok:#16794a;--okbg:#e6f4ec;--warn:#9a4b00;--warnbg:#fdf0e1;--err:#b42318;--errbg:#fde8e7}
 @media (prefers-color-scheme:dark){:root{--bg:#0f141b;--card:#18202a;--line:#2a3442;--txt:#e8edf3;--mut:#9aa6b5;--okbg:#123524;--warnbg:#3a2a12;--errbg:#3d1714}}
@@ -55,7 +55,10 @@ textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px
 </style>
 </head>
 <body>
-<div id="app"></div>
+<div id="app"><div class="anmelden"><h1 style="margin:0">Kühler Freigabe</h1><p style="color:var(--mut)">Wird geladen …</p></div></div>
+<script>
+window.onerror = function (m) { document.getElementById('app').innerHTML = '<div class="anmelden"><h1 style="margin:0">Kühler Freigabe</h1><p style="color:var(--err)">Fehler: ' + String(m).replace(/</g,'&lt;') + '</p></div>'; };
+</script>
 <script>
 /* ================= Einstellungen (keine Geheimnisse) ================= */
 const KONFIG = {
