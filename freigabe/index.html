@@ -118,6 +118,7 @@ function badge(e) {
   if (e.Status === 'Erledigt') return ['Außerhalb erledigt', 'b-grey'];
   if (e.Status === 'Fehler') return ['Achtung', 'b-err'];
   if (e.Entscheidung) return ['Wird verarbeitet …', 'b-grey'];
+  if (hatHinweis(e)) return ['In SelectLine korrigieren', 'b-err'];
   if (e.LieferantFrei === 'nein') return ['Lieferant nicht freigegeben', 'b-err'];
   if (!e.LieferantFrei) return ['Lieferant wird geprüft …', 'b-grey'];
   if (e.KalkAbw == null) return ['ohne Kalkpreis', 'b-grey'];
@@ -125,12 +126,13 @@ function badge(e) {
   return ['im Rahmen der Kalk', 'b-ok'];
 }
 const istLeer = e => !e.Lieferant || !(Number(e.Netto) > 0);
-const liefOk = e => e.LieferantFrei === 'ja';
+const hatHinweis = e => !!(e.Pruefhinweis && String(e.Pruefhinweis).trim());
+const liefOk = e => e.LieferantFrei === 'ja' && !hatHinweis(e);
 function sichtbar() {
   return S.eintraege.filter(e => {
     if (S.filter === 'offen') return e.Status === 'Offen' && !istLeer(e);
     if (S.filter === 'kalk') return e.Status === 'Offen' && e.KalkAbw > 2;
-    if (S.filter === 'lief') return e.Status === 'Offen' && !istLeer(e) && e.LieferantFrei === 'nein';
+    if (S.filter === 'lief') return e.Status === 'Offen' && !istLeer(e) && (e.LieferantFrei === 'nein' || hatHinweis(e));
     if (S.filter === 'leer') return e.Status === 'Offen' && istLeer(e);
     return e.Status !== 'Offen';
   }).sort((a, b) => String(b.Title).localeCompare(String(a.Title)));
@@ -164,7 +166,7 @@ function zeichne() {
     const sb = S.eintraege.filter(e => e.Status === 'Offen' && !e.Entscheidung && !istLeer(e) && liefOk(e) && e.KalkAbw != null && e.KalkAbw <= 2).length;
     h += `<div class="kopf"><small>Kühler GmbH &amp; Co. KG · ${esc(konto.name || '')}</small><h1>Freigaben</h1>
       <div class="kpis"><div class="kpi"><span>Offen</span><b>${offen.length}</b></div><div class="kpi" style="flex:2"><span>Offenes Volumen netto</span><b>${eur(offen.reduce((a, e) => a + (Number(e.Netto) || 0), 0))}</b></div></div></div>
-      <div class="chips">${[['offen', 'Offen'], ['lief', 'Lieferant offen'], ['kalk', 'Über Kalk'], ['leer', 'Leer / 0 €'], ['erledigt', 'Erledigt']].map(([k, l]) => `<button class="chip ${S.filter === k ? 'an' : ''}" data-f="${k}">${l}</button>`).join('')}</div>`;
+      <div class="chips">${[['offen', 'Offen'], ['lief', 'Zu klären'], ['kalk', 'Über Kalk'], ['leer', 'Leer / 0 €'], ['erledigt', 'Erledigt']].map(([k, l]) => `<button class="chip ${S.filter === k ? 'an' : ''}" data-f="${k}">${l}</button>`).join('')}</div>`;
     if (S.fehler) h += `<div class="hinweis" style="color:var(--err)">${esc(S.fehler)}</div>`;
     const liste = sichtbar();
     h += '<div class="liste">' + (S.laden ? '<div class="leer">Lade …</div>' : liste.length ? liste.map(e => {
@@ -190,10 +192,12 @@ function zeichne() {
         <div class="meta" style="margin-top:6px">${e.KalkAbw == null ? 'Für keine Position ist ein Kalkulationspreis hinterlegt.' : 'Abweichung gesamt ' + e.KalkAbw.toLocaleString('de-DE') + ' % · bezogen auf ' + (e.KalkAnteil || 0) + ' % des Bestellwerts'}</div></div>
         <div class="box"><b>Positionen (${e.pos.length})</b>${e.pos.map(p => `<div class="pos"><div class="reihe"><span><b>${esc(p.pos)}</b> · ${esc(p.art)}</span><b>${eur(p.gp)}</b></div><div>${esc(p.bez)}</div>
           <div class="meta">${p.menge} ${esc(p.me)} × ${eur(p.ep)}${p.rab ? ' − ' + p.rab + ' %' : ''}${p.kalk ? ' · Kalk ' + eur(p.kalk) + (p.abw != null ? ' (' + (p.abw > 0 ? '+' : '') + p.abw + ' %)' : '') : ''}</div></div>`).join('')}</div>
+        ${hatHinweis(e) ? `<div class="box"><b>SelectLine-Prüfung</b><div style="color:var(--err);margin-top:6px;white-space:pre-wrap">${esc(e.Pruefhinweis)}</div><div style="margin-top:6px;opacity:.7">Bitte in SelectLine korrigieren; danach erscheint die Bestellung hier wieder zur Freigabe.</div></div>` : ''}
         ${e.Meldung ? `<div class="box"><span class="tag ${e.Status === 'Fehler' ? 'b-err' : 'b-grey'}">${esc(e.Meldung)}</span></div>` : ''}
         <div style="height:110px"></div>`;
       if (e.Status === 'Offen' && !e.Entscheidung) {
-        const knopf = liefOk(e) ? `<button class="knopf" id="freigeben">Freigeben</button>`
+        const knopf = hatHinweis(e) ? `<button class="knopf aus" disabled>Freigabe erst nach Korrektur in SelectLine</button>`
+          : liefOk(e) ? `<button class="knopf" id="freigeben">Freigeben</button>`
           : e.LieferantFrei === 'nein' ? `<button class="knopf" id="liefFreigeben" style="background:var(--warn)">Lieferant + Bestellung freigeben</button>`
           : `<button class="knopf aus" disabled>Lieferantenstatus wird geprüft …</button>`;
         h += `<div class="fuss" style="background:var(--card);border-top:1px solid var(--line)">${knopf}</div>`;
