@@ -118,15 +118,19 @@ function badge(e) {
   if (e.Status === 'Erledigt') return ['Außerhalb erledigt', 'b-grey'];
   if (e.Status === 'Fehler') return ['Achtung', 'b-err'];
   if (e.Entscheidung) return ['Wird verarbeitet …', 'b-grey'];
+  if (e.LieferantFrei === 'nein') return ['Lieferant nicht freigegeben', 'b-err'];
+  if (!e.LieferantFrei) return ['Lieferant wird geprüft …', 'b-grey'];
   if (e.KalkAbw == null) return ['ohne Kalkpreis', 'b-grey'];
   if (e.KalkAbw > 2) return ['+' + e.KalkAbw.toLocaleString('de-DE') + ' % über Kalk', 'b-warn'];
   return ['im Rahmen der Kalk', 'b-ok'];
 }
 const istLeer = e => !e.Lieferant || !(Number(e.Netto) > 0);
+const liefOk = e => e.LieferantFrei === 'ja';
 function sichtbar() {
   return S.eintraege.filter(e => {
     if (S.filter === 'offen') return e.Status === 'Offen' && !istLeer(e);
     if (S.filter === 'kalk') return e.Status === 'Offen' && e.KalkAbw > 2;
+    if (S.filter === 'lief') return e.Status === 'Offen' && !istLeer(e) && e.LieferantFrei === 'nein';
     if (S.filter === 'leer') return e.Status === 'Offen' && istLeer(e);
     return e.Status !== 'Offen';
   }).sort((a, b) => String(b.Title).localeCompare(String(a.Title)));
@@ -137,13 +141,13 @@ async function entscheide(e, was, grund) {
   try {
     await graph('PATCH', S.listenPfad + '/items/' + e.id + '/fields', { Entscheidung: was, Begruendung: grund || '' });
     e.Entscheidung = was; S.ansicht = 'liste';
-    zeige(e.Title + (was === 'Freigeben' ? ' zur Freigabe übergeben' : ' zur Ablehnung übergeben'));
+    zeige(e.Title + (was === 'LieferantUndFreigeben' ? ' inkl. Lieferant zur Freigabe übergeben' : ' zur Freigabe übergeben'));
     setTimeout(ladeListe, 4000);
   } catch (err) { zeige('Fehler: ' + err.message); }
 }
 async function sammel() {
-  const ziel = S.eintraege.filter(e => e.Status === 'Offen' && !e.Entscheidung && !istLeer(e) && e.KalkAbw != null && e.KalkAbw <= 2);
-  if (!ziel.length || !confirm(ziel.length + ' Bestellungen im Rahmen der Kalk freigeben?')) return;
+  const ziel = S.eintraege.filter(e => e.Status === 'Offen' && !e.Entscheidung && !istLeer(e) && liefOk(e) && e.KalkAbw != null && e.KalkAbw <= 2);
+  if (!ziel.length || !confirm(ziel.length + ' Bestellungen im Rahmen der Kalk freigeben?\n(Bestellungen bei nicht freigegebenen Lieferanten sind ausgenommen.)')) return;
   for (const e of ziel) { await graph('PATCH', S.listenPfad + '/items/' + e.id + '/fields', { Entscheidung: 'Freigeben' }); e.Entscheidung = 'Freigeben'; }
   zeige(ziel.length + ' Bestellungen übergeben'); zeichne(); setTimeout(ladeListe, 4000);
 }
@@ -157,10 +161,10 @@ function zeichne() {
   const offen = S.eintraege.filter(e => e.Status === 'Offen' && !istLeer(e));
   let h = '';
   if (S.ansicht === 'liste') {
-    const sb = S.eintraege.filter(e => e.Status === 'Offen' && !e.Entscheidung && !istLeer(e) && e.KalkAbw != null && e.KalkAbw <= 2).length;
+    const sb = S.eintraege.filter(e => e.Status === 'Offen' && !e.Entscheidung && !istLeer(e) && liefOk(e) && e.KalkAbw != null && e.KalkAbw <= 2).length;
     h += `<div class="kopf"><small>Kühler GmbH &amp; Co. KG · ${esc(konto.name || '')}</small><h1>Freigaben</h1>
       <div class="kpis"><div class="kpi"><span>Offen</span><b>${offen.length}</b></div><div class="kpi" style="flex:2"><span>Offenes Volumen netto</span><b>${eur(offen.reduce((a, e) => a + (Number(e.Netto) || 0), 0))}</b></div></div></div>
-      <div class="chips">${[['offen', 'Offen'], ['kalk', 'Über Kalk'], ['leer', 'Leer / 0 €'], ['erledigt', 'Erledigt']].map(([k, l]) => `<button class="chip ${S.filter === k ? 'an' : ''}" data-f="${k}">${l}</button>`).join('')}</div>`;
+      <div class="chips">${[['offen', 'Offen'], ['lief', 'Lieferant offen'], ['kalk', 'Über Kalk'], ['leer', 'Leer / 0 €'], ['erledigt', 'Erledigt']].map(([k, l]) => `<button class="chip ${S.filter === k ? 'an' : ''}" data-f="${k}">${l}</button>`).join('')}</div>`;
     if (S.fehler) h += `<div class="hinweis" style="color:var(--err)">${esc(S.fehler)}</div>`;
     const liste = sichtbar();
     h += '<div class="liste">' + (S.laden ? '<div class="leer">Lade …</div>' : liste.length ? liste.map(e => {
@@ -180,14 +184,20 @@ function zeichne() {
         <div class="box" style="border:none;background:none;padding:0 0 30px;display:flex;gap:10px"><button class="knopf rand" id="abbr" style="flex:1">Abbrechen</button><button class="knopf rot" id="ablehnenOk" style="flex:2">Beleg ablehnen</button></div>`;
     } else {
       h += `<div class="box raster"><div class="feld"><span>Kommission</span><b>${esc(e.Kommission || '–')}</b></div><div class="feld"><span>Erstellt von</span><b>${esc(e.Ersteller || '–')}</b></div>
-        <div class="feld"><span>Liefertermin</span><b>${datum(e.Liefertermin)}</b></div><div class="feld"><span>Ansprechpartner</span><b>${esc(e.Ansprechpartner || '–')}</b></div></div>
+        <div class="feld"><span>Liefertermin</span><b>${datum(e.Liefertermin)}</b></div><div class="feld"><span>Ansprechpartner</span><b>${esc(e.Ansprechpartner || '–')}</b></div>
+        <div class="feld"><span>Lieferant-Nr.</span><b>${esc(e.LieferantNr || '–')}</b></div><div class="feld"><span>Lieferantenfreigabe</span><b style="color:${e.LieferantFrei === 'ja' ? 'var(--ok)' : 'var(--err)'}">${e.LieferantFrei === 'ja' ? 'freigegeben' : e.LieferantFrei === 'nein' ? 'nicht freigegeben' : 'wird geprüft …'}</b></div></div>
         <div class="box"><div class="reihe"><b>Abgleich mit Kalkpreis</b><span class="tag ${bc}">${bt}</span></div>
         <div class="meta" style="margin-top:6px">${e.KalkAbw == null ? 'Für keine Position ist ein Kalkulationspreis hinterlegt.' : 'Abweichung gesamt ' + e.KalkAbw.toLocaleString('de-DE') + ' % · bezogen auf ' + (e.KalkAnteil || 0) + ' % des Bestellwerts'}</div></div>
         <div class="box"><b>Positionen (${e.pos.length})</b>${e.pos.map(p => `<div class="pos"><div class="reihe"><span><b>${esc(p.pos)}</b> · ${esc(p.art)}</span><b>${eur(p.gp)}</b></div><div>${esc(p.bez)}</div>
           <div class="meta">${p.menge} ${esc(p.me)} × ${eur(p.ep)}${p.rab ? ' − ' + p.rab + ' %' : ''}${p.kalk ? ' · Kalk ' + eur(p.kalk) + (p.abw != null ? ' (' + (p.abw > 0 ? '+' : '') + p.abw + ' %)' : '') : ''}</div></div>`).join('')}</div>
         ${e.Meldung ? `<div class="box"><span class="tag ${e.Status === 'Fehler' ? 'b-err' : 'b-grey'}">${esc(e.Meldung)}</span></div>` : ''}
         <div style="height:110px"></div>`;
-      if (e.Status === 'Offen' && !e.Entscheidung) h += `<div class="fuss" style="background:var(--card);border-top:1px solid var(--line)"><button class="knopf" id="freigeben">Freigeben</button></div>`;
+      if (e.Status === 'Offen' && !e.Entscheidung) {
+        const knopf = liefOk(e) ? `<button class="knopf" id="freigeben">Freigeben</button>`
+          : e.LieferantFrei === 'nein' ? `<button class="knopf" id="liefFreigeben" style="background:var(--warn)">Lieferant + Bestellung freigeben</button>`
+          : `<button class="knopf aus" disabled>Lieferantenstatus wird geprüft …</button>`;
+        h += `<div class="fuss" style="background:var(--card);border-top:1px solid var(--line)">${knopf}</div>`;
+      }
     }
   }
   if (S.toast) h += `<div class="toast">${esc(S.toast)}</div>`;
@@ -201,6 +211,8 @@ function zeichne() {
   on('zurueck', () => { S.ansicht = 'liste'; zeichne(); });
   const sel = () => S.eintraege.find(x => x.id === S.sel);
   on('freigeben', () => { const e = sel(); if (confirm(e.Title + ' über ' + eur(e.Netto) + ' freigeben?')) entscheide(e, 'Freigeben'); });
+  on('liefFreigeben', () => { const e = sel();
+    if (confirm('Lieferant ' + e.Lieferant + ' (' + e.LieferantNr + ') ist nicht freigegeben.\n\nLieferant DAUERHAFT freigeben und ' + e.Title + ' über ' + eur(e.Netto) + ' freigeben?')) entscheide(e, 'LieferantUndFreigeben'); });
   on('ablehnen', () => { S.grund = ''; S.ansicht = 'ablehnen'; zeichne(); });
   on('abbr', () => { S.ansicht = 'detail'; zeichne(); });
   on('ablehnenOk', () => { const t = document.getElementById('grund').value.trim(); if (!t) return zeige('Bitte eine Begründung angeben'); entscheide(sel(), 'Ablehnen', t); });
